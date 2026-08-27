@@ -1,14 +1,9 @@
 {
   "name": "montenegrotrip",
   "version": "1.0.0",
-  "description": "",
-  "main": "dist/index.js",
+  "description": "The Montenegro Tapes — interactive road-movie travel guide",
   "scripts": {
-    "build": "tsc"
-  },
-  "dependencies": {},
-  "devDependencies": {
-    "typescript": "^5.5.3"
+    "start": "npx --yes serve . -p 5173"
   },
   "private": true
 }

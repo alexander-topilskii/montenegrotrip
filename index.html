@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>The Montenegro Tapes — 5–10 сентября 2026</title>
+    <meta
+      name="description"
+      content="Интерактивный путеводитель-роуд-муви: Подгорица, Котор, Ловчен, Дурмитор, Пива. 5–10 сентября 2026."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Caveat:wght@600&family=Instrument+Serif:ital@0;1&family=Outfit:wght@300;400;500;600&family=Special+Elite&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""
+    />
+    <link rel="stylesheet" href="css/styles.css" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎞</text></svg>"
+    />
+  </head>
+  <body>
+    <div class="grain" aria-hidden="true"></div>
+    <div class="light-leak" aria-hidden="true"></div>
+
+    <section class="intro" id="intro">
+      <div class="intro-vhs" aria-hidden="true"></div>
+      <div class="intro-inner">
+        <p class="prod">AMATEUR FILMS · SUPER 8</p>
+        <h1>The Montenegro <span>Tapes</span></h1>
+        <p class="screenplay">
+          FADE IN:<br /><br />
+          EXT. ШОССЕ E762 — GOLDEN HOUR<br /><br />
+          Шесть дней. Одна машина.<br />
+          Черногория, снятая как подростковый роуд-муви.
+        </p>
+        <button class="play" id="play" type="button"><i></i> PLAY</button>
+        <button class="skip" id="skip" type="button">пропустить титры</button>
+      </div>
+    </section>
+
+    <header class="topbar">
+      <div class="rec"><b></b> REC <span id="rec-time">00:00:00</span></div>
+      <a class="brand" href="#top">The Montenegro Tapes</a>
+      <nav class="days-nav" id="days-nav" aria-label="Дни поездки"></nav>
+    </header>
+
+    <section class="hero" id="top" style="--hero: url('/images/hero.jpg')">
+      <div class="hero-bg"></div>
+      <div class="hero-copy">
+        <span class="ticket">NOW SHOWING · 5–10 СЕН 2026 · 6 REELS</span>
+        <h1>The Montenegro<br /><em>Tapes</em></h1>
+        <p class="lede">
+          Путеводитель, который хочет быть фильмом: залив, серпантин, перевал Седло
+          и финальные титры в аэропорту Подгорицы.
+        </p>
+        <div class="stats">
+          <div class="stat"><b>6</b><span>дней</span></div>
+          <div class="stat"><b>~650</b><span>километров</span></div>
+          <div class="stat"><b>4</b><span>ночёвки</span></div>
+          <div class="stat"><b>21:20</b><span>прилёт / вылет ~22</span></div>
+        </div>
+      </div>
+      <div class="polaroids" aria-hidden="true">
+        <figure class="polaroid">
+          <img src="images/kotor.jpg" alt="" />
+          <figcaption>Котор, день второй</figcaption>
+        </figure>
+        <figure class="polaroid">
+          <img src="images/perast.jpg" alt="" />
+          <figcaption>Пераст, как открытка</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="road" id="map-section">
+      <div class="atlas">
+        <div id="map" role="application" aria-label="Карта маршрута"></div>
+        <div class="map-hud">
+          <button class="hud-btn" id="play-route" type="button">Проиграть маршрут</button>
+          <button class="hud-btn" id="fit-route" type="button">Весь путь</button>
+          <button class="hud-btn" id="sat-toggle" type="button">Спутник</button>
+        </div>
+      </div>
+      <div class="story" id="story"></div>
+    </section>
+
+    <section class="panel alt" id="stays">
+      <div class="wrap">
+        <p class="section-kicker">MOTEL RECEIPTS</p>
+        <h2 class="section-title">Где спим</h2>
+        <p class="section-lead">
+          Четыре адреса, как корешки из мотеля у шоссе. Шавник — на две ночи, это база под Дурмитор.
+        </p>
+        <div class="receipts" id="receipts"></div>
+      </div>
+    </section>
+
+    <section class="panel" id="mixtape">
+      <div class="wrap">
+        <p class="section-kicker">SIDE A / SIDE B</p>
+        <h2 class="section-title">Кассета на бардачок</h2>
+        <p class="section-lead">
+          Не саундтрек страны — саундтрек жанра. Включать, когда серпантин начинает спорить с желудком.
+        </p>
+        <div class="mixtape">
+          <div class="cassette" aria-hidden="true">
+            <div class="window">
+              <div class="reel"></div>
+              <div class="reel"></div>
+            </div>
+            <div class="label">THE MONTENEGRO TAPES · SEPT ’26</div>
+          </div>
+          <ol class="tracks" id="tracks"></ol>
+        </div>
+      </div>
+    </section>
+
+    <footer class="credits">
+      <h2>THE END</h2>
+      <p>
+        5 сентября, 21:20 — прилёт.<br />
+        10 сентября, 21:00 — уже можно ехать в аэропорт.<br />
+        Машину вернуть. Титры поднять. Не гулять по Подгорице.
+      </p>
+      <p class="photo-credit">
+        Кадры: залив Котора и Пераст — Wikimedia Commons; Дурмитор — Wikimedia;
+        шоссе и пейзажи — Unsplash.
+      </p>
+    </footer>
+
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+      crossorigin=""
+    ></script>
+    <script src="js/trip.js"></script>
+    <script src="js/app.js"></script>
+  </body>
+</html>

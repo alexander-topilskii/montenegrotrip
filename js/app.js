@@ -45,6 +45,7 @@
               <p class="slug">${day.slug}</p>
               <h2>${day.title}</h2>
               <div class="meta">
+                <span class="chip">${day.track}</span>
                 <span class="chip">${day.date}</span>
                 <span class="chip">${day.weekday}</span>
                 <span class="chip">${day.drive}</span>
@@ -55,6 +56,7 @@
             <img src="${photo}" alt="${day.caption}" loading="lazy">
             <figcaption>${day.caption}</figcaption>
           </figure>
+          <blockquote class="liner">${day.quote}</blockquote>
           <p class="summary">${day.summary}</p>
           <div class="stops">${stops}</div>
         </section>`;
@@ -92,12 +94,17 @@
       .join("");
   }
 
-  let map, carMarker, stopLayer, routeLine, streets, sat;
+  let map, carMarker, streets, sat;
   const markers = {};
+  let activeDay = null;
+  let activeLine = null;
+  let snakeRaf = 0;
+  let dayToken = 0;
+  let playing = false;
 
   function pinIcon(label, color) {
     return L.divIcon({
-      className: "",
+      className: "pin-icon",
       html: `<div class="pin" style="--c:${color}"><span>${label}</span></div>`,
       iconSize: [28, 28],
       iconAnchor: [4, 26],
@@ -111,12 +118,31 @@
     return [lat + Math.cos(a) * 0.014 * n, lng + Math.sin(a) * 0.018 * n];
   }
 
+  function densify(latlngs, n = 90) {
+    const out = [];
+    for (let i = 0; i < latlngs.length - 1; i++) {
+      const a = latlngs[i];
+      const b = latlngs[i + 1];
+      const steps = Math.max(2, Math.round(n / (latlngs.length - 1)));
+      for (let s = 0; s < steps; s++) {
+        const t = s / steps;
+        out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
+      }
+    }
+    out.push(latlngs[latlngs.length - 1]);
+    return out;
+  }
+
+  function dayOf(id) {
+    return TRIP.days.find((d) => d.id === id);
+  }
+
   function initMap() {
     map = L.map("map", {
       zoomControl: false,
       attributionControl: true,
       scrollWheelZoom: true,
-    }).setView([42.75, 19.05], 8);
+    }).setView([42.44, 19.26], 10);
 
     L.control.zoom({ position: "topright" }).addTo(map);
 
@@ -130,17 +156,7 @@
     );
     streets.addTo(map);
 
-    routeLine = L.polyline(TRIP.route, {
-      color: "#c45c26",
-      weight: 3.5,
-      opacity: 0.95,
-      dashArray: "10 8",
-      lineCap: "round",
-    }).addTo(map);
-
-    stopLayer = L.layerGroup().addTo(map);
     const seen = {};
-
     TRIP.days.forEach((day) => {
       day.stops.forEach((stop) => {
         const key = `${stop.lat.toFixed(3)},${stop.lng.toFixed(3)}`;
@@ -149,15 +165,17 @@
         const m = L.marker([lat, lng], {
           icon: pinIcon(day.hwy.replace(/^0/, ""), day.color),
         }).bindPopup(
-          `<div class="pop"><h3>${stop.name}</h3><p>${day.date} · ${stop.time}</p><p>${stop.note}</p></div>`
+          `<div class="pop"><h3>${stop.name}</h3><p>${day.track} · ${day.date}</p><p>${stop.note}</p></div>`
         );
-        m.on("click", () => highlightStop(stop.id, false));
+        m.dayId = day.id;
+        m.stopId = stop.id;
+        m.on("click", () => highlightStop(stop.id, true));
         markers[stop.id] = m;
-        stopLayer.addLayer(m);
+        m.addTo(map);
       });
     });
 
-    carMarker = L.marker(TRIP.route[0], {
+    carMarker = L.marker(TRIP.days[0].route[0], {
       icon: L.divIcon({
         className: "car-marker",
         html: "🚗",
@@ -166,8 +184,94 @@
       zIndexOffset: 1000,
     }).addTo(map);
 
-    map.fitBounds(routeLine.getBounds().pad(0.12));
-    setTimeout(() => map.invalidateSize(), 300);
+    setTimeout(() => {
+      map.invalidateSize();
+      setActiveDay(TRIP.days[0].id, { fly: false, force: true });
+    }, 300);
+  }
+
+  function applyMarkerFocus(id) {
+    Object.values(markers).forEach((m) => {
+      const el = m.getElement();
+      if (!el) return;
+      const on = m.dayId === id;
+      el.classList.toggle("is-off", !on);
+      el.classList.toggle("is-on-day", on);
+      if (!on) m.closePopup();
+    });
+  }
+
+  function snakeDay(day, token) {
+    if (snakeRaf) cancelAnimationFrame(snakeRaf);
+    if (activeLine) {
+      map.removeLayer(activeLine);
+      activeLine = null;
+    }
+    const pts = day.route && day.route.length > 1 ? day.route : day.stops.map((s) => [s.lat, s.lng]);
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    activeLine = L.polyline(reduced ? pts : [pts[0]], {
+      color: day.color,
+      weight: 4.5,
+      opacity: 0.95,
+      lineCap: "round",
+      className: "route-active",
+    }).addTo(map);
+    carMarker.setLatLng(pts[0]);
+    if (reduced) {
+      carMarker.setLatLng(pts[pts.length - 1]);
+      return;
+    }
+    const dense = densify(pts, 110);
+    const t0 = performance.now();
+    const duration = 1100;
+    function tick(now) {
+      if (token !== dayToken) return;
+      const t = Math.min(1, (now - t0) / duration);
+      const ease = 1 - (1 - t) * (1 - t);
+      const idx = Math.max(1, Math.floor(ease * (dense.length - 1)));
+      activeLine.setLatLngs(dense.slice(0, idx + 1));
+      carMarker.setLatLng(dense[idx]);
+      if (t < 1) snakeRaf = requestAnimationFrame(tick);
+    }
+    snakeRaf = requestAnimationFrame(tick);
+  }
+
+  function setActiveDay(id, opts = {}) {
+    const { fly = true, force = false, skipFit = false } = opts;
+    if (!force && id === activeDay) return;
+    const day = dayOf(id);
+    if (!day) return;
+    playing = false;
+    const hud = $("#play-route");
+    if (hud) hud.textContent = "Проиграть сторону";
+    activeDay = id;
+    dayToken += 1;
+    const token = dayToken;
+
+    document.querySelectorAll(".days-nav a").forEach((a) => {
+      a.classList.toggle("is-on", a.dataset.day === id);
+    });
+    document.querySelectorAll(".day").forEach((el) => {
+      el.classList.toggle("is-current", el.id === id);
+    });
+    const now = $("#map-now");
+    if (now) {
+      now.textContent = `${day.track} · ${day.date} · ${day.title}`;
+    }
+
+    applyMarkerFocus(id);
+    requestAnimationFrame(() => applyMarkerFocus(id));
+    snakeDay(day, token);
+
+    const pts = day.route && day.route.length ? day.route : day.stops.map((s) => [s.lat, s.lng]);
+    const b = L.latLngBounds(pts).pad(0.35);
+    if (skipFit) return;
+    if (fly) {
+      map.flyToBounds(b, { duration: 1.15 });
+      map.once("moveend", () => applyMarkerFocus(id));
+    } else {
+      map.fitBounds(b);
+    }
   }
 
   function highlightStop(id, fly = true) {
@@ -175,45 +279,39 @@
       el.classList.toggle("is-on", el.dataset.stop === id);
     });
     const stopEl = document.querySelector(`[data-stop="${id}"]`);
-    if (stopEl && fly) {
+    if (!stopEl) return;
+    if (stopEl.dataset.day !== activeDay) {
+      setActiveDay(stopEl.dataset.day, { fly: false, skipFit: true });
+    }
+    if (fly) {
       const lat = Number(stopEl.dataset.lat);
       const lng = Number(stopEl.dataset.lng);
-      map.flyTo([lat, lng], 12, { duration: 1.1 });
+      map.flyTo([lat, lng], 13, { duration: 0.9 });
       markers[id]?.openPopup();
     }
-    if (stopEl) {
-      document.querySelectorAll(".days-nav a").forEach((a) => {
-        a.classList.toggle("is-on", a.dataset.day === stopEl.dataset.day);
-      });
-    }
   }
-
-  function flyDay(id) {
-    const day = TRIP.days.find((d) => d.id === id);
-    if (!day) return;
-    const pts = day.stops.map((s) => [s.lat, s.lng]);
-    map.flyToBounds(L.latLngBounds(pts).pad(0.35), { duration: 1.2 });
-    document.querySelectorAll(".days-nav a").forEach((a) => {
-      a.classList.toggle("is-on", a.dataset.day === id);
-    });
-  }
-
-  let playing = false;
 
   function lerp(a, b, t) {
     return a + (b - a) * t;
   }
 
   function playRoute() {
-    if (playing) return;
+    const day = dayOf(activeDay);
+    if (!day || playing) return;
     playing = true;
-    const pts = TRIP.route;
-    const steps = 280;
+    const token = dayToken;
+    const pts = densify(day.route, 160);
+    const steps = pts.length - 1;
     let i = 0;
     const hud = $("#play-route");
-    hud.textContent = "Идёт плёнка…";
+    hud.textContent = "Идёт сторона…";
+    if (activeLine) activeLine.setLatLngs([pts[0]]);
 
     function tick() {
+      if (!playing || token !== dayToken) {
+        hud.textContent = "Проиграть сторону";
+        return;
+      }
       const t = i / steps;
       const f = t * (pts.length - 1);
       const i0 = Math.floor(f);
@@ -222,17 +320,25 @@
       const lat = lerp(pts[i0][0], pts[i1][0], lt);
       const lng = lerp(pts[i0][1], pts[i1][1], lt);
       carMarker.setLatLng([lat, lng]);
+      if (activeLine) activeLine.setLatLngs(pts.slice(0, i1 + 1));
       map.panTo([lat, lng], { animate: false });
       i += 1;
       if (i <= steps) {
         requestAnimationFrame(tick);
       } else {
         playing = false;
-        hud.textContent = "Проиграть маршрут";
-        map.fitBounds(routeLine.getBounds().pad(0.12));
+        hud.textContent = "Проиграть сторону";
+        const b = L.latLngBounds(day.route);
+        map.flyToBounds(b.pad(0.28), { duration: 0.8 });
       }
     }
     tick();
+  }
+
+  function fitActiveDay() {
+    const day = dayOf(activeDay);
+    if (!day) return;
+    map.flyToBounds(L.latLngBounds(day.route).pad(0.3), { duration: 0.9 });
   }
 
   function bind() {
@@ -251,13 +357,11 @@
     $("#days-nav").addEventListener("click", (e) => {
       const a = e.target.closest("a");
       if (!a) return;
-      flyDay(a.dataset.day);
+      setActiveDay(a.dataset.day, { fly: true, force: true });
     });
 
     $("#play-route").addEventListener("click", playRoute);
-    $("#fit-route").addEventListener("click", () => {
-      map.fitBounds(routeLine.getBounds().pad(0.12));
-    });
+    $("#fit-route").addEventListener("click", fitActiveDay);
     $("#sat-toggle").addEventListener("click", () => {
       const usingSat = map.hasLayer(sat);
       if (usingSat) {
@@ -285,17 +389,16 @@
     }, 1000);
 
     const days = [...document.querySelectorAll(".day")];
+    const vis = {};
     const io = new IntersectionObserver(
       (entries) => {
         entries.forEach((en) => {
-          if (en.isIntersecting) {
-            document.querySelectorAll(".days-nav a").forEach((a) => {
-              a.classList.toggle("is-on", a.dataset.day === en.target.id);
-            });
-          }
+          vis[en.target.id] = en.isIntersecting ? en.intersectionRatio : 0;
         });
+        const best = Object.entries(vis).sort((a, b) => b[1] - a[1])[0];
+        if (best && best[1] > 0.18) setActiveDay(best[0], { fly: true });
       },
-      { rootMargin: "-40% 0px -50% 0px", threshold: 0 }
+      { rootMargin: "-28% 0px -42% 0px", threshold: [0, 0.18, 0.35, 0.55, 0.8] }
     );
     days.forEach((d) => io.observe(d));
   }
@@ -306,7 +409,10 @@
     const close = () => {
       root.classList.add("is-gone");
       sessionStorage.setItem("mne-intro", "1");
-      setTimeout(() => map?.invalidateSize(), 400);
+      setTimeout(() => {
+        map?.invalidateSize();
+        if (activeDay) setActiveDay(activeDay, { fly: false, force: true });
+      }, 400);
     };
     if (gone) {
       root.classList.add("is-gone");

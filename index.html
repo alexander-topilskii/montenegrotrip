@@ -6,7 +6,7 @@
     <title>The Montenegro Tapes — 5–10 сентября 2026</title>
     <meta
       name="description"
-      content="Интерактивный путеводитель-роуд-муви: Подгорица, Котор, Ловчен, Дурмитор, Пива. 5–10 сентября 2026."
+      content="Прощальная кассета: Подгорица, Котор, Ловчен, Дурмитор, Пива. 5–10 сентября 2026."
     />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -33,16 +33,16 @@
     <section class="intro" id="intro">
       <div class="intro-vhs" aria-hidden="true"></div>
       <div class="intro-inner">
-        <p class="prod">AMATEUR FILMS · SUPER 8</p>
+        <p class="prod">ONE LAST GREATEST HIT · SUPER 8</p>
         <h1>The Montenegro <span>Tapes</span></h1>
         <p class="screenplay">
-          FADE IN:<br /><br />
-          EXT. ШОССЕ E762 — GOLDEN HOUR<br /><br />
-          Шесть дней. Одна машина.<br />
-          Черногория, снятая как подростковый роуд-муви.
+          SIDE A<br /><br />
+          Don't walk away in silence.<br /><br />
+          Шесть дней. Одна кассета.<br />
+          Потом разъедемся. Пока — жми PLAY.
         </p>
         <button class="play" id="play" type="button"><i></i> PLAY</button>
-        <button class="skip" id="skip" type="button">пропустить титры</button>
+        <button class="skip" id="skip" type="button">перемотать титры</button>
       </div>
     </section>
 
@@ -55,11 +55,11 @@
     <section class="hero" id="top">
       <div class="hero-bg"></div>
       <div class="hero-copy">
-        <span class="ticket">NOW SHOWING · 5–10 СЕН 2026 · 6 REELS</span>
+        <span class="ticket">SIDE A / SIDE B · 5–10 СЕН 2026 · LAST NIGHT</span>
         <h1>The Montenegro<br /><em>Tapes</em></h1>
         <p class="lede">
-          Путеводитель, который хочет быть фильмом: залив, серпантин, перевал Седло
-          и финальные титры в аэропорту Подгорицы.
+          Не путеводитель. Прощальная кассета.
+          То, что мы ещё не успели соскучиться.
         </p>
         <div class="stats">
           <div class="stat"><b>6</b><span>дней</span></div>
@@ -71,11 +71,11 @@
       <div class="polaroids" aria-hidden="true">
         <figure class="polaroid">
           <img src="images/kotor.jpg" alt="" />
-          <figcaption>Котор, день второй</figcaption>
+          <figcaption>ещё не знаем, что это лучший день</figcaption>
         </figure>
         <figure class="polaroid">
           <img src="images/perast.jpg" alt="" />
-          <figcaption>Пераст, как открытка</figcaption>
+          <figcaption>остров, который будут вспоминать</figcaption>
         </figure>
       </div>
     </section>
@@ -83,9 +83,10 @@
     <section class="road" id="map-section">
       <div class="atlas">
         <div id="map" role="application" aria-label="Карта маршрута"></div>
+        <div class="map-now" id="map-now">A1 · 5 сентября</div>
         <div class="map-hud">
-          <button class="hud-btn" id="play-route" type="button">Проиграть маршрут</button>
-          <button class="hud-btn" id="fit-route" type="button">Весь путь</button>
+          <button class="hud-btn" id="play-route" type="button">Проиграть сторону</button>
+          <button class="hud-btn" id="fit-route" type="button">Этот день</button>
           <button class="hud-btn" id="sat-toggle" type="button">Спутник</button>
         </div>
       </div>
@@ -94,10 +95,11 @@
 
     <section class="panel alt" id="stays">
       <div class="wrap">
-        <p class="section-kicker">MOTEL RECEIPTS</p>
-        <h2 class="section-title">Где спим</h2>
+        <p class="section-kicker">LINER NOTES · BEDS</p>
+        <h2 class="section-title">Где нам снилось</h2>
         <p class="section-lead">
-          Четыре адреса, как корешки из мотеля у шоссе. Шавник — на две ночи, это база под Дурмитор.
+          Четыре адреса, как имена на вкладыше кассеты. Шавник — на две ночи:
+          некоторые тишины нужно оставить дважды, чтобы поверить.
         </p>
         <div class="receipts" id="receipts"></div>
       </div>
@@ -108,7 +110,8 @@
         <p class="section-kicker">SIDE A / SIDE B</p>
         <h2 class="section-title">Кассета на бардачок</h2>
         <p class="section-lead">
-          Не саундтрек страны — саундтрек жанра. Включать, когда серпантин начинает спорить с желудком.
+          Не саундтрек страны — саундтрек прощания. Включать, когда серпантин
+          начинает спорить с горлом. Don't walk away in silence.
         </p>
         <div class="mixtape">
           <div class="cassette" aria-hidden="true">
@@ -126,9 +129,10 @@
     <footer class="credits">
       <h2>THE END</h2>
       <p>
-        5 сентября, 21:20 — прилёт.<br />
+        5 сентября, 21:20 — ещё не умели скучать.<br />
         10 сентября, 21:00 — уже можно ехать в аэропорт.<br />
-        Машину вернуть. Титры поднять. Не гулять по Подгорице.
+        Ключи отдают раньше, чем готово сердце.<br />
+        Не прощай. Просто выключи свет.
       </p>
       <p class="photo-credit">
         Кадры: залив Котора и Пераст — Wikimedia Commons; Дурмитор — Wikimedia;

@@ -2,7 +2,7 @@
 <html lang="ru">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>The Montenegro Tapes — 5–10 сентября 2026</title>
     <meta
       name="description"
@@ -29,6 +29,33 @@
   <body>
     <div class="grain" aria-hidden="true"></div>
     <div class="light-leak" aria-hidden="true"></div>
+    <div class="fx-layer" id="fx-layer" aria-hidden="true">
+      <canvas id="fx-canvas"></canvas>
+      <div class="fx-dom" id="fx-dom"></div>
+      <div class="lis-moths">
+        <i></i><i></i><i></i><i></i>
+      </div>
+      <div class="edge-sparkles">
+        <span>✦</span><span>❄</span><span>✧</span><span>🦋</span>
+        <span>⋆</span><span>❅</span><span>✩</span><span>🦋</span>
+        <span>✦</span><span>❄</span><span>✧</span><span>⋆</span>
+      </div>
+    </div>
+    <div class="polaroid-flash" id="polaroid-flash" aria-hidden="true"></div>
+    <div class="tape-ritual" id="tape-ritual" aria-hidden="true">
+      <div class="ritual-inner">
+        <div class="ritual-deck">
+          <div class="ritual-tape">
+            <div class="window">
+              <div class="reel"></div>
+              <div class="reel"></div>
+            </div>
+            <div class="label">THE MONTENEGRO TAPES · SIDE A</div>
+          </div>
+        </div>
+        <p class="ritual-caption"><b>CLICK</b> SIDE A · PLAYING</p>
+      </div>
+    </div>
 
     <section class="intro" id="intro">
       <div class="intro-vhs" aria-hidden="true"></div>
@@ -43,11 +70,26 @@
         </p>
         <button class="play" id="play" type="button"><i></i> PLAY</button>
         <button class="skip" id="skip" type="button">перемотать титры</button>
+        <div class="intro-walkman" id="intro-walkman" aria-hidden="true">
+          <div class="deck">
+            <div class="deck-window">
+              <div class="intro-tape">
+                <div class="window">
+                  <div class="reel"></div>
+                  <div class="reel"></div>
+                </div>
+                <div class="label">MNE TAPES · SIDE A</div>
+              </div>
+            </div>
+            <span class="deck-eq"><b></b><b></b><b></b><b></b><b></b></span>
+          </div>
+        </div>
       </div>
     </section>
 
     <header class="topbar">
       <div class="rec"><b></b> REC <span id="rec-time">00:00:00</span></div>
+      <span class="now-play" id="now-play">▶ SIDE A</span>
       <a class="brand" href="#top">The Montenegro Tapes</a>
       <nav class="days-nav" id="days-nav" aria-label="Дни поездки"></nav>
     </header>
@@ -67,6 +109,7 @@
           <div class="stat"><b>4</b><span>ночёвки</span></div>
           <div class="stat"><b>21:20</b><span>прилёт / вылет ~22</span></div>
         </div>
+        <a class="to-map" href="#map-section">↓ карта и дни</a>
       </div>
       <div class="polaroids" aria-hidden="true">
         <figure class="polaroid">
@@ -83,7 +126,9 @@
     <section class="road" id="map-section">
       <div class="atlas">
         <div id="map" role="application" aria-label="Карта маршрута"></div>
+        <div class="map-corners" aria-hidden="true"></div>
         <div class="map-now" id="map-now">A1 · 5 сентября</div>
+        <div class="map-arrive" id="map-arrive"></div>
         <div class="map-hud">
           <button class="hud-btn" id="play-route" type="button">Проиграть сторону</button>
           <button class="hud-btn" id="fit-route" type="button">Этот день</button>

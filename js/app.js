@@ -16,11 +16,11 @@
     walk: "пешком",
     boat: "вода",
     sleep: "ночёвка",
-    optional: "опционально",
+    optional: "по желанию",
     vista: "вид",
     fun: "аттракцион",
     tip: "заметка",
-    skip: "skip",
+    skip: "скорее нет",
   };
 
   const saved = JSON.parse(localStorage.getItem("mne-tapes") || "{}");
@@ -37,7 +37,7 @@
             <div class="meta">
               <span class="chip">весь маршрут</span>
               <span class="chip">без следования</span>
-              <span class="chip">~650 км</span>
+              <span class="chip">~750 км</span>
             </div>
           </div>
         </div>
@@ -157,7 +157,6 @@
       star: ["✦", "✧", "⋆", "✩", "✶"],
       snow: ["❄", "❅", "❆", "✻"],
       note: ["♪", "♫", "♩", "♬"],
-      moth: ["🦋"],
       spark: ["·", "˚", "✧"],
     };
 
@@ -262,13 +261,11 @@
           ? roll > 0.5
             ? "star"
             : "snow"
-          : roll > 0.72
-            ? "moth"
-            : roll > 0.42
-              ? "star"
-              : roll > 0.18
-                ? "snow"
-                : "spark";
+          : roll > 0.55
+            ? "star"
+            : roll > 0.22
+              ? "snow"
+              : "spark";
         spawn(kind);
         if (!compact && Math.random() > 0.4) spawn("star");
         if (!compact && Math.random() > 0.55) spawn("snow");
@@ -327,7 +324,7 @@
       ambientIv = window.setInterval(() => {
         if (!document.body.classList.contains("tape-on")) return;
         if (travel > 0.2) return;
-        spawn(Math.random() > 0.65 ? "moth" : "spark");
+        spawn(Math.random() > 0.65 ? "star" : "spark");
       }, 1600);
     }
 
@@ -361,9 +358,10 @@
   let dayFollow = false;
   let followZooming = false;
   let holdFollowY = null;
-  let ritualDone = sessionStorage.getItem("mne-tape-ritual") === "1";
-  let sawInsert = false;
   let ignoreScrollDrive = 0;
+  let followCam = null;
+  let carFlip = 1;
+  let carFlipHold = 0;
 
   function pinIcon(label, color) {
     return L.divIcon({
@@ -514,20 +512,91 @@
     return Math.abs(a[0] - b[0]) < eps && Math.abs(a[1] - b[1]) < eps;
   }
 
-  function setCarFlip(a, b) {
+  function segLen(a, b) {
+    return Math.hypot(b[0] - a[0], b[1] - a[1]);
+  }
+
+  function cumDist(pts) {
+    const c = new Float64Array(pts.length);
+    for (let i = 1; i < pts.length; i++) c[i] = c[i - 1] + segLen(pts[i - 1], pts[i]);
+    return c;
+  }
+
+  function sampleAlong(pts, cum, dist) {
+    const n = pts.length;
+    const total = cum[n - 1];
+    if (n < 2 || dist <= 0) return { ll: pts[0], i0: 0, i1: 1 };
+    if (dist >= total) return { ll: pts[n - 1], i0: n - 2, i1: n - 1 };
+    let lo = 0;
+    let hi = n - 1;
+    while (hi - lo > 1) {
+      const mid = (lo + hi) >> 1;
+      if (cum[mid] < dist) lo = mid;
+      else hi = mid;
+    }
+    const span = cum[hi] - cum[lo] || 1e-9;
+    const t = (dist - cum[lo]) / span;
+    return {
+      ll: [lerp(pts[lo][0], pts[hi][0], t), lerp(pts[lo][1], pts[hi][1], t)],
+      i0: lo,
+      i1: hi,
+    };
+  }
+
+  function easeAlong(t) {
+    if (t <= 0) return 0;
+    if (t >= 1) return 1;
+    const a = 0.18;
+    if (t < a) {
+      const u = t / a;
+      return a * u * u * (3 - 2 * u);
+    }
+    if (t > 1 - a) {
+      const u = (1 - t) / a;
+      return 1 - a * u * u * (3 - 2 * u);
+    }
+    return t;
+  }
+
+  function setCarFlip(pts, i0) {
     const wrap = carMarker?.getElement()?.querySelector(".car-rot");
-    if (!wrap) return;
-    if (almost(a, b, 0.00008)) return;
-    // 🚗 faces left; mirror only when driving east so it stays level.
-    wrap.style.transform = b[1] > a[1] ? "scaleX(-1)" : "scaleX(1)";
+    if (!wrap || !pts || pts.length < 2) return;
+    const i1 = Math.min(pts.length - 1, i0 + 10);
+    const dx = pts[i1][1] - pts[i0][1];
+    if (Math.abs(dx) < 0.0002) return;
+    const next = dx > 0 ? -1 : 1;
+    if (next === carFlip) {
+      carFlipHold = 0;
+      return;
+    }
+    carFlipHold += 1;
+    if (carFlipHold < 8) return;
+    carFlip = next;
+    carFlipHold = 0;
+    wrap.style.transform = carFlip < 0 ? "scaleX(-1)" : "scaleX(1)";
   }
 
   function pathDuration(pts) {
+    if (!pts || pts.length < 2) return 800;
     let d = 0;
-    for (let i = 1; i < pts.length; i++) {
-      d += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+    for (let i = 1; i < pts.length; i++) d += segLen(pts[i - 1], pts[i]);
+    const ms = d * (isCompact() ? 3200 : 5200);
+    return Math.min(isCompact() ? 7000 : 11000, Math.max(1100, ms));
+  }
+
+  function resetFollowCam(ll) {
+    followCam = ll ? { lat: ll[0], lng: ll[1] } : null;
+  }
+
+  function keepCarInView(ll) {
+    if (!map || !dayFollow) return;
+    if (!followCam) {
+      followCam = { lat: ll[0], lng: ll[1] };
+    } else {
+      followCam.lat += (ll[0] - followCam.lat) * 0.16;
+      followCam.lng += (ll[1] - followCam.lng) * 0.16;
     }
-    return Math.min(isCompact() ? 2200 : 3800, Math.max(480, d * (isCompact() ? 1400 : 1900)));
+    map.setView([followCam.lat, followCam.lng], map.getZoom(), { animate: false });
   }
 
   function buildPath(day, destLL) {
@@ -555,11 +624,6 @@
       if (dayFollow) activeLine.setLatLngs(dense.slice(0, Math.max(2, idx + 1)));
       else activeLine.setLatLngs(dense);
     }
-  }
-
-  function keepCarInView(ll) {
-    if (!map || !dayFollow) return;
-    map.panTo(ll, { animate: false });
   }
 
   function lineStyle(color, ghost) {
@@ -627,7 +691,7 @@
     }
     traveling = true;
     FX.travelOn();
-    if (notes) FX.rainNotes(Math.min(2800, pathDuration(pts)));
+    if (notes) FX.rainNotes(Math.min(3200, pathDuration(pts)));
     if (reduced()) {
       const last = pts[pts.length - 1];
       carMarker.setLatLng(last);
@@ -638,8 +702,13 @@
       onDone?.();
       return;
     }
+    const cum = cumDist(pts);
+    const total = cum[cum.length - 1] || 1e-9;
     const t0 = performance.now();
     const dur = opts.duration || pathDuration(pts);
+    carFlipHold = 0;
+    resetFollowCam(pts[0]);
+    let lineTick = 0;
     function tick(now) {
       if (token !== driveToken) {
         const hud = $("#play-route");
@@ -647,26 +716,20 @@
         return;
       }
       const t = Math.min(1, (now - t0) / dur);
-      const ease = t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
-      const f = ease * (pts.length - 1);
-      const i0 = Math.floor(f);
-      const i1 = Math.min(i0 + 1, pts.length - 1);
-      const lt = f - i0;
-      const lat = lerp(pts[i0][0], pts[i1][0], lt);
-      const lng = lerp(pts[i0][1], pts[i1][1], lt);
-      const ll = [lat, lng];
+      const { ll, i0 } = sampleAlong(pts, cum, easeAlong(t) * total);
       carMarker.setLatLng(ll);
-      setCarFlip(pts[i0], pts[i1]);
+      setCarFlip(pts, i0);
       const sub = currentSubject();
-      if (sub) updateProgressLine(sub, ll);
+      if (sub && (t >= 1 || (lineTick++ & 2) === 0)) updateProgressLine(sub, ll);
       if (pan) keepCarInView(ll);
       if (t < 1) {
         driveRaf = requestAnimationFrame(tick);
       } else {
         traveling = false;
         FX.travelOff();
+        if (sub) updateProgressLine(sub, ll);
         if (opts.flash !== false && pts.length > 10) FX.flash();
-        if (zoomAfter) map.flyTo(pts[pts.length - 1], zoomAfter, { duration: 0.7 });
+        if (zoomAfter) map.flyTo(pts[pts.length - 1], zoomAfter, { duration: 0.85 });
         onDone?.();
       }
     }
@@ -710,6 +773,7 @@
     activeStop = null;
     traveling = false;
     driveToken += 1;
+    resetFollowCam(null);
     activeDay = "overview";
     setNav("overview");
     const now = $("#map-now");
@@ -737,6 +801,7 @@
       followZooming = false;
       holdFollowY = window.scrollY;
       activeStop = null;
+      resetFollowCam(null);
     }
     setNav(id);
     const now = $("#map-now");
@@ -836,10 +901,10 @@
       else handler.disable();
     };
     toggle(map.dragging, !compact);
-    toggle(map.touchZoom, !compact);
-    toggle(map.scrollWheelZoom, !compact);
-    toggle(map.doubleClickZoom, !compact);
-    toggle(map.keyboard, !compact);
+    toggle(map.touchZoom, false);
+    toggle(map.scrollWheelZoom, false);
+    toggle(map.doubleClickZoom, false);
+    toggle(map.keyboard, false);
     map.invalidateSize();
   }
 
@@ -853,15 +918,26 @@
     map = L.map("map", {
       zoomControl: false,
       attributionControl: true,
-      scrollWheelZoom: !compact,
+      scrollWheelZoom: false,
       dragging: !compact,
-      touchZoom: !compact,
-      doubleClickZoom: !compact,
+      touchZoom: false,
+      doubleClickZoom: false,
       boxZoom: false,
-      keyboard: !compact,
+      keyboard: false,
     }).setView([42.44, 19.26], compact ? 8.5 : 10);
 
     L.control.zoom({ position: "topright" }).addTo(map);
+    map.getContainer().addEventListener(
+      "wheel",
+      (e) => {
+        e.preventDefault();
+        if (e.ctrlKey || e.metaKey) return;
+        const root = document.scrollingElement || document.documentElement;
+        root.scrollTop += e.deltaY;
+        root.scrollLeft += e.deltaX;
+      },
+      { passive: false }
+    );
 
     streets = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: "&copy; OpenStreetMap",
@@ -935,9 +1011,10 @@
       hud.textContent = "Идёт сторона…";
       dayFollow = true;
       FX.rainNotes(1800);
-      ignoreScrollDrive = Date.now() + 12000;
+      const dur = Math.min(18000, Math.max(5200, pathDuration(pts) * 1.25));
+      ignoreScrollDrive = Date.now() + dur + 400;
       driveAlong(pts, {
-        duration: Math.min(14000, Math.max(4000, pts.length * 12)),
+        duration: dur,
         pan: true,
         notes: true,
         onDone: () => {
@@ -956,9 +1033,10 @@
     hud.textContent = "Идёт сторона…";
     dayFollow = true;
     FX.rainNotes(2200);
-    ignoreScrollDrive = Date.now() + 10000;
+    const dur = Math.min(14000, Math.max(3600, pathDuration(pts) * 1.2));
+    ignoreScrollDrive = Date.now() + dur + 400;
     driveAlong(pts, {
-      duration: Math.min(10000, Math.max(2800, pts.length * 12)),
+      duration: dur,
       pan: true,
       notes: true,
       onDone: () => {
@@ -1027,27 +1105,105 @@
     return null;
   }
 
-  function playTapeRitual() {
-    if (ritualDone) return;
-    ritualDone = true;
-    sessionStorage.setItem("mne-tape-ritual", "1");
-    FX.startAmbient();
-    if (reduced() || sawInsert || isCompact()) {
-      FX.rainNotes(isCompact() ? 1400 : 2600);
-      return;
+  function clamp01(v) {
+    return Math.min(1, Math.max(0, v));
+  }
+
+  function smoothstep(t) {
+    return t * t * (3 - 2 * t);
+  }
+
+  function initCassette() {
+    const hero = $("#hero");
+    const stage = $("#hero-stage");
+    const cassette = $("#cassette");
+    const anchor = $("#anchor-start");
+    const slot = $("#deck-slot");
+    const door = $("#deck-door");
+    const intro = $("#hero-intro");
+    const status = $("#deck-status");
+    const cue = $("#scroll-cue");
+    if (!hero || !stage || !cassette || !anchor || !slot || !door || !intro || !status || !cue) return;
+
+    const STATUS = [
+      "вставь кассету — прокрути вниз",
+      "ещё немного…",
+      "щёлк",
+      "▶ играет: MONTENEGRO ’26, side A",
+    ];
+
+    let fired = false;
+    let ticking = false;
+    let lastPlaying = false;
+
+    function render() {
+      const rect = hero.getBoundingClientRect();
+      const total = hero.offsetHeight - window.innerHeight;
+      const p = reduced() ? 1 : clamp01(total > 0 ? -rect.top / total : 0);
+
+      if (rect.bottom < -200) {
+        ticking = false;
+        return;
+      }
+
+      const stageRect = stage.getBoundingClientRect();
+      const aRect = anchor.getBoundingClientRect();
+      const sRect = slot.getBoundingClientRect();
+      const ax = aRect.left - stageRect.left + aRect.width / 2;
+      const ay = aRect.top - stageRect.top + aRect.height / 2;
+      const sx = sRect.left - stageRect.left + sRect.width / 2;
+      const sy = sRect.top - stageRect.top + sRect.height / 2;
+      const t = smoothstep(clamp01(p / 0.62));
+      const shake = p > 0.5 && p < 0.68 ? Math.sin(p * 220) * 2.2 * (1 - t) : 0;
+      cassette.style.transform =
+        `translate(calc(-50% + ${ax + (sx - ax) * t + shake}px), calc(-50% + ${ay + (sy - ay) * t}px)) ` +
+        `rotate(${-7 + 7 * t + shake * 0.4}deg) scale(${1 + (0.44 - 1) * t})`;
+      cassette.style.opacity = String(clamp01(1 - (p - 0.58) / 0.1));
+      intro.style.opacity = String(clamp01(1 - p / 0.34));
+      intro.style.transform = `translateY(${-p * 70}px)`;
+      cue.style.opacity = String(clamp01(1 - p / 0.22));
+      const d = clamp01((p - 0.56) / 0.12);
+      door.style.transform = `scaleY(${d})`;
+      door.style.opacity = String(0.25 + d * 0.75);
+
+      const playing = p > 0.66;
+      if (playing !== lastPlaying) {
+        lastPlaying = playing;
+        document.body.classList.toggle("is-playing", playing);
+      }
+      if (playing && !fired) {
+        fired = true;
+        FX.startAmbient();
+        if (!reduced()) {
+          FX.clack();
+          window.setTimeout(() => FX.clack(), 160);
+          FX.rainNotes(isCompact() ? 1800 : 3600);
+        }
+      }
+      if (!playing) fired = fired && p > 0.6;
+
+      const si = p < 0.3 ? 0 : p < 0.56 ? 1 : p < 0.66 ? 2 : 3;
+      if (status.dataset.i !== String(si)) {
+        status.dataset.i = String(si);
+        status.textContent = STATUS[si];
+        status.classList.toggle("is-live", si === 3);
+      }
+      stage.style.setProperty("--away", String(clamp01((p - 0.74) / 0.26)));
+      ticking = false;
     }
-    const overlay = $("#tape-ritual");
-    overlay.classList.add("is-on");
-    FX.clack();
-    window.setTimeout(() => FX.clack(), 180);
-    FX.rainNotes(3800);
-    window.setTimeout(() => overlay.classList.remove("is-on"), 2600);
+
+    function onScroll() {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(render);
+    }
+
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    requestAnimationFrame(render);
   }
 
   function onScrollFrame() {
-    const intro = $("#intro");
-    if (intro && !intro.classList.contains("is-gone")) return;
-    if (!ritualDone && window.scrollY > window.innerHeight * 0.12) playTapeRitual();
     if (Date.now() < ignoreScrollDrive) return;
     if (followZooming) return;
     const target = targetFromScroll();
@@ -1193,55 +1349,12 @@
     }
   }
 
-  function intro() {
-    const root = $("#intro");
-    const gone = sessionStorage.getItem("mne-intro") === "1";
-    const close = () => {
-      root.classList.add("is-gone");
-      sessionStorage.setItem("mne-intro", "1");
-      FX.startAmbient();
-      setTimeout(() => {
-        refreshMapSize();
-        showOverview({ fly: true });
-      }, 400);
-    };
-    if (gone) {
-      root.classList.add("is-gone");
-      FX.startAmbient();
-      return;
-    }
-    $("#play").addEventListener("click", () => {
-      if (reduced()) {
-        close();
-        return;
-      }
-      sawInsert = true;
-      root.classList.add("is-inserting");
-      FX.clack();
-      window.setTimeout(() => FX.clack(), 160);
-      FX.rainNotes(isCompact() ? 1600 : 3400);
-      window.setTimeout(close, isCompact() ? 1600 : 2600);
-    });
-    $("#skip").addEventListener("click", close);
-    document.addEventListener(
-      "keydown",
-      (e) => {
-        if (e.key === "Escape") close();
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          $("#play").click();
-        }
-      },
-      { once: true }
-    );
-  }
-
   renderNav();
   renderStory();
   renderStays();
   renderTape();
   FX.init();
-  intro();
+  initCassette();
   initMap();
   bind();
 })();

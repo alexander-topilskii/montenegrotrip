@@ -3,15 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <title>The Montenegro Tapes — 5–10 сентября 2026</title>
+    <title>МОНТЕНЕГРО — плёнка на шесть дней</title>
     <meta
       name="description"
-      content="Прощальная кассета: Подгорица, Котор, Ловчен, Дурмитор, Пива. 5–10 сентября 2026."
+      content="Монтенегро '26 — интерактивный путеводитель-микстейп на шесть дней: Котор, Ловчен, Дурмитор, Пива, Скадар."
     />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Caveat:wght@600&family=Instrument+Serif:ital@0;1&family=Outfit:wght@300;400;500;600&family=Special+Elite&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Caveat:wght@400;600;700&family=Instrument+Serif:ital@0;1&family=Outfit:wght@300;400;500;600&family=Special+Elite&family=Unbounded:wght@300;500;700&display=swap"
       rel="stylesheet"
     />
     <link
@@ -32,102 +32,142 @@
     <div class="fx-layer" id="fx-layer" aria-hidden="true">
       <canvas id="fx-canvas"></canvas>
       <div class="fx-dom" id="fx-dom"></div>
-      <div class="lis-moths">
-        <i></i><i></i><i></i><i></i>
-      </div>
       <div class="edge-sparkles">
-        <span>✦</span><span>❄</span><span>✧</span><span>🦋</span>
-        <span>⋆</span><span>❅</span><span>✩</span><span>🦋</span>
+        <span>✦</span><span>❄</span><span>✧</span><span>⋆</span>
+        <span>⋆</span><span>❅</span><span>✩</span><span>✧</span>
         <span>✦</span><span>❄</span><span>✧</span><span>⋆</span>
       </div>
     </div>
     <div class="polaroid-flash" id="polaroid-flash" aria-hidden="true"></div>
-    <div class="tape-ritual" id="tape-ritual" aria-hidden="true">
-      <div class="ritual-inner">
-        <div class="ritual-deck">
-          <div class="ritual-tape">
-            <div class="window">
-              <div class="reel"></div>
-              <div class="reel"></div>
-            </div>
-            <div class="label">THE MONTENEGRO TAPES · SIDE A</div>
-          </div>
-        </div>
-        <p class="ritual-caption"><b>CLICK</b> SIDE A · PLAYING</p>
-      </div>
-    </div>
-
-    <section class="intro" id="intro">
-      <div class="intro-vhs" aria-hidden="true"></div>
-      <div class="intro-inner">
-        <p class="prod">ONE LAST GREATEST HIT · SUPER 8</p>
-        <h1>The Montenegro <span>Tapes</span></h1>
-        <p class="screenplay">
-          SIDE A<br /><br />
-          Don't walk away in silence.<br /><br />
-          Шесть дней. Одна кассета.<br />
-          Потом разъедемся. Пока — жми PLAY.
-        </p>
-        <button class="play" id="play" type="button"><i></i> PLAY</button>
-        <button class="skip" id="skip" type="button">перемотать титры</button>
-        <div class="intro-walkman" id="intro-walkman" aria-hidden="true">
-          <div class="deck">
-            <div class="deck-window">
-              <div class="intro-tape">
-                <div class="window">
-                  <div class="reel"></div>
-                  <div class="reel"></div>
-                </div>
-                <div class="label">MNE TAPES · SIDE A</div>
-              </div>
-            </div>
-            <span class="deck-eq"><b></b><b></b><b></b><b></b><b></b></span>
-          </div>
-        </div>
-      </div>
-    </section>
 
     <header class="topbar">
       <div class="rec"><b></b> REC <span id="rec-time">00:00:00</span></div>
       <span class="now-play" id="now-play">▶ SIDE A</span>
-      <a class="brand" href="#top">The Montenegro Tapes</a>
+      <a class="brand" href="#hero">МОНТЕНЕГРО</a>
       <nav class="days-nav" id="days-nav" aria-label="Дни поездки"></nav>
     </header>
 
-    <section class="hero" id="top">
-      <div class="hero-bg"></div>
-      <div class="hero-copy">
-        <span class="ticket">SIDE A / SIDE B · 5–10 СЕН 2026 · LAST NIGHT</span>
-        <h1>The Montenegro<br /><em>Tapes</em></h1>
-        <p class="lede">
-          Не путеводитель. Прощальная кассета.
-          То, что мы ещё не успели соскучиться.
-        </p>
-        <div class="stats">
-          <div class="stat"><b>6</b><span>дней</span></div>
-          <div class="stat"><b>~650</b><span>километров</span></div>
-          <div class="stat"><b>4</b><span>ночёвки</span></div>
-          <div class="stat"><b>21:20</b><span>прилёт / вылет ~22</span></div>
+    <section class="tape-hero" id="hero">
+      <div class="tape-stage" id="hero-stage">
+        <div class="tape-intro" id="hero-intro">
+          <p class="tape-kicker">магнитная лента · 6 дней · 90 минут на сторону</p>
+          <h1 class="tape-title">МОНТЕНЕГРО</h1>
+          <p class="tape-sub">плёнка на шесть дней · 5 — 10 сентября 2026</p>
         </div>
-        <a class="to-map" href="#overview">↓ карта и дни</a>
+
+        <div class="tape-anchor" id="anchor-start"></div>
+
+        <div class="hero-cassette" id="cassette">
+          <svg viewBox="0 0 320 200" class="hero-cassette__svg" aria-label="Аудиокассета">
+            <defs>
+              <linearGradient id="shellGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#2b2f38" />
+                <stop offset="100%" stop-color="#15181e" />
+              </linearGradient>
+              <linearGradient id="labelGrad" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#f4e6cd" />
+                <stop offset="100%" stop-color="#e2caa4" />
+              </linearGradient>
+              <linearGradient id="sheen" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stop-color="#fff" stop-opacity="0" />
+                <stop offset="45%" stop-color="#fff" stop-opacity=".16" />
+                <stop offset="100%" stop-color="#fff" stop-opacity="0" />
+              </linearGradient>
+            </defs>
+            <rect x="2" y="2" width="316" height="196" rx="12" fill="url(#shellGrad)" stroke="#0c0e12" stroke-width="2" />
+            <rect x="14" y="14" width="292" height="104" rx="6" fill="url(#labelGrad)" />
+            <rect x="14" y="14" width="292" height="104" rx="6" fill="url(#sheen)" />
+            <line x1="22" y1="42" x2="298" y2="42" stroke="#c4552f" stroke-width="1.5" opacity=".45" />
+            <line x1="22" y1="96" x2="298" y2="96" stroke="#7fa8b8" stroke-width="1.5" opacity=".45" />
+            <text x="30" y="36" class="hero-cassette__label">MONTENEGRO ’26</text>
+            <text x="30" y="72" class="hero-cassette__hand">дорога, которая ещё не случилась</text>
+            <text x="30" y="112" class="hero-cassette__small">SIDE A · 6 треков · без перемотки</text>
+            <text x="272" y="112" class="hero-cassette__small">90</text>
+            <rect x="66" y="126" width="188" height="52" rx="8" fill="#0e1015" stroke="#3a3f4a" stroke-width="1.5" />
+            <rect x="74" y="132" width="172" height="40" rx="5" fill="#1b1e25" />
+            <g class="tape-reel" style="--reel-x: 112px; --reel-y: 152px">
+              <circle cx="112" cy="152" r="17" fill="#0b0d11" />
+              <circle cx="112" cy="152" r="15" fill="none" stroke="#6b4a2c" stroke-width="8" />
+              <g class="tape-reel__spokes">
+                <circle cx="112" cy="152" r="8" fill="#c9c2b4" />
+                <rect x="110.5" y="140" width="3" height="24" fill="#2a2d34" />
+                <rect x="100" y="150.5" width="24" height="3" fill="#2a2d34" />
+              </g>
+            </g>
+            <g class="tape-reel" style="--reel-x: 208px; --reel-y: 152px">
+              <circle cx="208" cy="152" r="17" fill="#0b0d11" />
+              <circle cx="208" cy="152" r="10" fill="none" stroke="#6b4a2c" stroke-width="5" />
+              <g class="tape-reel__spokes">
+                <circle cx="208" cy="152" r="8" fill="#c9c2b4" />
+                <rect x="206.5" y="140" width="3" height="24" fill="#2a2d34" />
+                <rect x="196" y="150.5" width="24" height="3" fill="#2a2d34" />
+              </g>
+            </g>
+            <rect x="129" y="150" width="62" height="4" fill="#4a3a2a" />
+            <circle cx="20" cy="188" r="3" fill="#0a0c10" />
+            <circle cx="300" cy="188" r="3" fill="#0a0c10" />
+            <circle cx="20" cy="12" r="3" fill="#0a0c10" />
+            <circle cx="300" cy="12" r="3" fill="#0a0c10" />
+          </svg>
+        </div>
+
+        <div class="tape-deck" id="deck">
+          <div class="tape-deck__body">
+            <div class="tape-deck__window">
+              <div class="tape-deck__reels">
+                <span class="tape-deck__reel"></span>
+                <span class="tape-deck__tape"></span>
+                <span class="tape-deck__reel"></span>
+              </div>
+              <div class="tape-deck__slot" id="deck-slot"></div>
+              <div class="tape-deck__door" id="deck-door"></div>
+            </div>
+            <div class="tape-deck__panel">
+              <div class="tape-deck__buttons">
+                <span class="tape-btn">◀◀</span>
+                <span class="tape-btn tape-btn--play" id="btn-play">▶</span>
+                <span class="tape-btn">▶▶</span>
+                <span class="tape-btn">■</span>
+              </div>
+              <div class="tape-vu" id="vu">
+                <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+              </div>
+            </div>
+            <div class="tape-deck__brand">AUTO&nbsp;REVERSE · DOLBY&nbsp;B&nbsp;NR</div>
+          </div>
+          <p class="tape-deck__status" id="deck-status">вставь кассету — прокрути вниз</p>
+        </div>
+
+        <div class="scroll-cue" id="scroll-cue">
+          <span>крути вниз</span>
+          <span class="scroll-cue__arrow">↓</span>
+        </div>
       </div>
+    </section>
+
+    <section class="epigraph" id="top">
+      <p class="epigraph__text">
+        Нажми PLAY.<br />Дальше — только дорога и то, что мы успеем запомнить.
+      </p>
+      <p class="epigraph__sign">— шесть дней, одна машина, полный багажник сентября</p>
       <div class="polaroids" aria-hidden="true">
         <figure class="polaroid">
           <img src="images/kotor.jpg" alt="" />
-          <figcaption>ещё не знаем, что это лучший день</figcaption>
+          <figcaption>город, который держат горы за плечи</figcaption>
         </figure>
         <figure class="polaroid">
           <img src="images/perast.jpg" alt="" />
-          <figcaption>остров, который будут вспоминать</figcaption>
+          <figcaption>остров, который люди насыпали руками</figcaption>
         </figure>
       </div>
+      <a class="to-map" href="#overview">↓ карта и дни</a>
     </section>
 
     <section class="road" id="map-section">
       <div class="atlas">
         <div id="map" role="application" aria-label="Карта маршрута"></div>
         <div class="map-corners" aria-hidden="true"></div>
-        <div class="map-now" id="map-now">A1 · 5 сентября</div>
+        <div class="map-now" id="map-now">весь маршрут · аэропорт → Дурмитор → аэропорт</div>
         <div class="map-arrive" id="map-arrive"></div>
         <div class="map-hud">
           <button class="hud-btn" id="play-route" type="button">Проиграть сторону</button>
@@ -140,11 +180,11 @@
 
     <section class="panel alt" id="stays">
       <div class="wrap">
-        <p class="section-kicker">LINER NOTES · BEDS</p>
+        <p class="section-kicker">разворот вкладыша</p>
         <h2 class="section-title">Где нам снилось</h2>
         <p class="section-lead">
-          Четыре адреса, как имена на вкладыше кассеты. Шавник — на две ночи:
-          некоторые тишины нужно оставить дважды, чтобы поверить.
+          Четыре адреса. Шавник — на две ночи: некоторые тишины нужно оставить
+          дважды, чтобы поверить.
         </p>
         <div class="receipts" id="receipts"></div>
       </div>
@@ -152,11 +192,10 @@
 
     <section class="panel" id="mixtape">
       <div class="wrap">
-        <p class="section-kicker">SIDE A / SIDE B</p>
+        <p class="section-kicker">SIDE A / шесть треков</p>
         <h2 class="section-title">Кассета на бардачок</h2>
         <p class="section-lead">
-          Не саундтрек страны — саундтрек прощания. Включать, когда серпантин
-          начинает спорить с горлом. Don't walk away in silence.
+          Не саундтрек страны — шесть дней на одной стороне. Без перемотки.
         </p>
         <div class="mixtape">
           <div class="cassette" aria-hidden="true">
@@ -164,7 +203,7 @@
               <div class="reel"></div>
               <div class="reel"></div>
             </div>
-            <div class="label">THE MONTENEGRO TAPES · SEPT ’26</div>
+            <div class="label">MONTENEGRO ’26 · SIDE A</div>
           </div>
           <ol class="tracks" id="tracks"></ol>
         </div>
@@ -172,16 +211,14 @@
     </section>
 
     <footer class="credits">
-      <h2>THE END</h2>
+      <h2>END OF SIDE A</h2>
       <p>
-        5 сентября, 21:20 — ещё не умели скучать.<br />
-        10 сентября, 21:00 — уже можно ехать в аэропорт.<br />
-        Ключи отдают раньше, чем готово сердце.<br />
-        Не прощай. Просто выключи свет.
+        Плёнка домотана. Дальше щелчок, тишина и белый шум — тот самый звук,
+        с которым заканчивается любое лето.
       </p>
+      <p class="photo-credit">Side B — когда-нибудь потом.</p>
       <p class="photo-credit">
-        Кадры: залив Котора и Пераст — Wikimedia Commons; Дурмитор — Wikimedia;
-        шоссе и пейзажи — Unsplash.
+        карта — OpenStreetMap · собрано вручную, как микстейп для важного человека
       </p>
     </footer>
 

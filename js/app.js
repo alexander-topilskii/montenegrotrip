@@ -745,6 +745,36 @@
       }
     }
 
+    function filmProgress() {
+      const plan = $("#plan");
+      if (!plan) return 0;
+      const vh = window.innerHeight;
+      const top = window.scrollY + plan.getBoundingClientRect().top;
+      const start = top - vh * 0.12;
+      const end = top + plan.offsetHeight - vh * 0.72;
+      return clamp01((window.scrollY - start) / Math.max(1, end - start));
+    }
+
+    function pickFrame(vh) {
+      const c = vh * 0.48;
+      let idx = lastBest;
+      let bestDist = Infinity;
+      let seen = false;
+      frames.forEach((el, i) => {
+        const r = el.getBoundingClientRect();
+        if (r.bottom <= 48 || r.top >= vh - 48) return;
+        seen = true;
+        const mid = (r.top + r.bottom) / 2;
+        let dist = Math.abs(mid - c);
+        if (i === lastBest) dist -= vh * 0.06;
+        if (dist < bestDist) {
+          bestDist = dist;
+          idx = i;
+        }
+      });
+      return seen ? idx : lastBest;
+    }
+
     function tick() {
       if (!frames.length) {
         raf = 0;
@@ -753,7 +783,7 @@
       const vh = window.innerHeight;
       const motion = !reduced();
       const lerpF = motion ? 0.15 : 1;
-      const lerpCar = motion ? 0.1 : 1;
+      const lerpCar = motion ? 0.12 : 1;
 
       const raw = frames.map((el) => {
         const r = el.getBoundingClientRect();
@@ -765,15 +795,7 @@
             : 0.18;
       });
 
-      let best = 0;
-      let bestF = -1;
-      frames.forEach((_, i) => {
-        if (raw[i] > bestF) {
-          bestF = raw[i];
-          best = i;
-        }
-      });
-      if (raw[lastBest] >= 0.16 && raw[lastBest] + 0.07 >= bestF) best = lastBest;
+      const best = pickFrame(vh);
       lastBest = best;
 
       let moving = false;
@@ -829,7 +851,7 @@
         document.body.classList.toggle("is-on-road", fr.top < vh * 0.78 && fr.bottom > 90);
       }
 
-      const t0 = parseFloat(el.dataset.t) || 0;
+      const t0 = filmProgress();
       const prevCar = carT;
       carT += (t0 - carT) * lerpCar;
       placeCar(clamp01(carT));

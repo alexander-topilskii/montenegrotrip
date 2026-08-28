@@ -668,14 +668,10 @@
 
     function focusFromRect(r, vh) {
       const mid = (r.top + r.bottom) / 2;
-      const c = vh * 0.46;
-      const dist = Math.abs(mid - c) / vh;
-      const hold = 0.15;
-      const edge = 0.3;
-      if (dist <= hold) return 1;
-      if (dist >= edge) return 0;
-      const u = (dist - hold) / (edge - hold);
-      return 1 - u * u * u;
+      const dist = Math.abs(mid - vh * 0.5) / vh;
+      if (dist >= 0.42) return 0;
+      const u = dist / 0.42;
+      return 1 - u * u;
     }
 
     function applyBg(src) {
@@ -761,7 +757,7 @@
     }
 
     function pickFrame(vh) {
-      const c = vh * 0.46;
+      const c = vh * 0.5;
       let idx = lastBest;
       let bestDist = Infinity;
       let seen = false;
@@ -769,9 +765,7 @@
         const r = el.getBoundingClientRect();
         if (r.bottom <= 48 || r.top >= vh - 48) return;
         seen = true;
-        const mid = (r.top + r.bottom) / 2;
-        let dist = Math.abs(mid - c);
-        if (i === lastBest) dist -= vh * 0.08;
+        const dist = Math.abs((r.top + r.bottom) / 2 - c);
         if (dist < bestDist) {
           bestDist = dist;
           idx = i;
@@ -805,10 +799,10 @@
       let moving = false;
       frames.forEach((el, i) => {
         let target = raw[i];
-        if (i === best) target = Math.max(target, 0.94);
-        else target *= 0.36;
+        if (i === best) target = Math.max(target, 0.88);
+        else target *= 0.55;
         const prev = parseFloat(el.style.getPropertyValue("--focus")) || 0;
-        const k = motion ? (target > prev + 0.002 ? 0.32 : 0.17) : 1;
+        const k = motion ? 0.22 : 1;
         let next = prev + (target - prev) * k;
         if (Math.abs(next - target) < 0.003) next = target;
         else moving = true;

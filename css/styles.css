@@ -63,8 +63,6 @@ html.deck-docked {
 html {
   scroll-behavior: auto;
   -webkit-text-size-adjust: 100%;
-  scroll-snap-type: y proximity;
-  scroll-padding-top: var(--top);
 }
 
 html,
@@ -1135,7 +1133,7 @@ body.is-traveling .road-puff-b {
 .frame {
   position: relative;
   width: min(560px, 94vw);
-  min-height: 104vh;
+  min-height: 88vh;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1147,26 +1145,20 @@ body.is-traveling .road-puff-b {
   isolation: isolate;
 }
 
-.frame--day,
-.frame--shot,
-.frame--over {
-  scroll-snap-align: center;
-}
-
 .frame--day {
-  min-height: 122vh;
+  min-height: 102vh;
 }
 
 .frame--shot {
-  min-height: 118vh;
+  min-height: 96vh;
 }
 
 .frame--reel {
-  min-height: 86vh;
+  min-height: 72vh;
 }
 
 .frame--over {
-  min-height: 126vh;
+  min-height: 108vh;
   gap: 28px;
 }
 
@@ -1922,11 +1914,11 @@ body.is-traveling .grain {
   .frame--day,
   .frame--shot,
   .frame--over {
-    min-height: 108vh;
+    min-height: 92vh;
   }
 
   .frame--reel {
-    min-height: 78vh;
+    min-height: 64vh;
   }
 
   .frame-shot {
@@ -1994,7 +1986,6 @@ body.is-traveling .grain {
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
-    scroll-snap-type: none;
   }
   .grain,
   .reel,

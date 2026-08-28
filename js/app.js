@@ -25,102 +25,200 @@
 
   const saved = JSON.parse(localStorage.getItem("mne-tapes") || "{}");
 
+  const LAND = [
+    [41.877, 19.247],
+    [41.93, 19.18],
+    [42.05, 19.1],
+    [42.18, 18.97],
+    [42.28, 18.84],
+    [42.39, 18.71],
+    [42.486, 18.698],
+    [42.45, 18.53],
+    [42.42, 18.44],
+    [42.58, 18.5],
+    [42.76, 18.66],
+    [42.96, 18.8],
+    [43.16, 18.88],
+    [43.35, 19.02],
+    [43.548, 19.22],
+    [43.5, 19.48],
+    [43.3, 19.7],
+    [43.08, 19.92],
+    [42.88, 20.08],
+    [42.84, 20.166],
+    [42.68, 19.98],
+    [42.52, 19.74],
+    [42.4, 19.52],
+    [42.26, 19.4],
+    [42.08, 19.36],
+    [41.94, 19.3],
+  ];
+
+  const CITIES = [
+    { name: "Котор", lat: 42.425, lng: 18.771 },
+    { name: "Ловчен", lat: 42.4, lng: 18.82 },
+    { name: "Подгорица", lat: 42.441, lng: 19.262 },
+    { name: "Шавник", lat: 42.956, lng: 19.097 },
+    { name: "Дурмитор", lat: 43.155, lng: 19.123 },
+  ];
+
+  let userPaused = false;
+  let dockedDeck = false;
+  let inserted = false;
+  let activeDay = "overview";
+  let lastDayFlash = "";
+  let traveling = false;
+
   function photoUrl(key) {
     return (key && TRIP.photos[key]) || "";
   }
 
-  function renderShot(stop, variant) {
-    const src = photoUrl(stop.photo);
-    if (!src) return "";
-    const cap = variant === "card" ? `<figcaption>${stop.name}</figcaption>` : "";
-    return `<figure class="shot shot--${variant}" aria-hidden="true"><img src="${src}" alt="" loading="lazy" decoding="async">${cap}</figure>`;
+  function clamp01(v) {
+    return Math.min(1, Math.max(0, v));
   }
 
-  function renderStory() {
-    const ov = TRIP.overview;
-    const overviewHtml = `
-      <section class="day overview-day" id="overview">
-        <div class="day-head">
-          <div class="hwy" aria-hidden="true">00</div>
-          <div>
-            <p class="slug">${ov.slug}</p>
-            <h2>${ov.title}</h2>
-            <div class="meta">
-              <span class="chip">весь маршрут</span>
-              <span class="chip">без следования</span>
-              <span class="chip">~750 км</span>
-            </div>
-          </div>
-        </div>
-        <blockquote class="liner">${ov.quote}</blockquote>
-        <p class="summary">${ov.summary}</p>
-        <ol class="spine">
-          ${ov.points
-            .map(
-              (p) => `
-            <li data-ov="${p.id}" data-lat="${p.lat}" data-lng="${p.lng}">
-              <span class="n">${p.n}</span>
-              <div>
-                <h3>${p.name}</h3>
-                <p>${p.place}</p>
-              </div>
-            </li>`
-            )
-            .join("")}
-        </ol>
-      </section>`;
+  function smoothstep(t) {
+    return t * t * (3 - 2 * t);
+  }
 
-    const root = $("#story");
-    root.innerHTML =
-      overviewHtml +
+  function escapeAttr(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+  }
+
+  function renderNav() {
+    const ov = `<a href="#overview" data-day="overview" title="Вся плёнка">◯</a>`;
+    $("#days-nav").innerHTML =
+      ov +
       TRIP.days
-        .map((day) => {
-        const photo = TRIP.photos[day.photo];
-        const stops = day.stops
-          .map((stop, i) => {
-            const checked = saved[stop.id] ? "checked" : "";
-            const shot = renderShot(stop, "card");
-            const n = String(i + 1).padStart(2, "0");
-            return `
-            <article class="stop${shot ? " has-shot" : ""}" id="stop-${stop.id}" data-kind="${stop.kind}" data-stop="${stop.id}" data-day="${day.id}" data-lat="${stop.lat}" data-lng="${stop.lng}">
-              <input class="check" type="checkbox" data-id="${stop.id}" ${checked} aria-label="Отметить: ${stop.name}">
-              <div class="stop__body">
-                <h3><span class="stop-n">${n}</span>${stop.name}</h3>
-                <p>${stop.note}</p>
-                <a class="maps-link" href="${stop.maps}" target="_blank" rel="noopener">открыть в картах</a>
-              </div>
-              <div class="kind">${stop.time}<small>${stop.dur} · ${kinds[stop.kind] || stop.kind}</small></div>
-              ${shot}
-            </article>`;
-          })
-          .join("");
-        return `
-        <section class="day" id="${day.id}">
-          <div class="day-lead">
-            <div class="day-head">
-              <div class="hwy" aria-hidden="true">${day.hwy}</div>
-              <div>
-                <p class="slug">${day.slug}</p>
-                <h2>${day.title}</h2>
-                <div class="meta">
-                  <span class="chip">${day.track}</span>
-                  <span class="chip">${day.date}</span>
-                  <span class="chip">${day.weekday}</span>
-                  <span class="chip">${day.drive}</span>
-                </div>
-              </div>
-            </div>
-            <figure class="still">
-              <img src="${photo}" alt="${day.caption}" loading="lazy">
+        .map((d) => `<a href="#${d.id}" data-day="${d.id}" title="${d.date}">${d.date.split(" ")[0]}</a>`)
+        .join("");
+  }
+
+  function ticketMarkup(stop, day, i) {
+    const n = String(i + 1).padStart(2, "0");
+    const checked = saved[stop.id] ? "checked" : "";
+    return `
+      <article class="ticket" id="stop-${stop.id}" data-kind="${stop.kind}">
+        <input class="check" type="checkbox" data-id="${stop.id}" ${checked} aria-label="Отметить: ${stop.name}">
+        <div>
+          <p class="frame-kicker">${n} · ${kinds[stop.kind] || stop.kind} · ${stop.dur}</p>
+          <h3>${stop.name}</h3>
+          <p class="frame-note">${stop.note}</p>
+        </div>
+        <span class="kind">${stop.time}</span>
+      </article>`;
+  }
+
+  function shotMarkup(stop, day, i, src) {
+    const n = String(i + 1).padStart(2, "0");
+    const checked = saved[stop.id] ? "checked" : "";
+    const tilt = i % 2 ? 2.4 : -2.8;
+    return `
+      <article class="frame frame--shot" id="stop-${stop.id}"
+        data-day="${day.id}" data-photo="${src}" data-kind="${stop.kind}"
+        data-lat="${stop.lat}" data-lng="${stop.lng}" data-now="${escapeAttr(stop.name)}"
+        style="--day:${day.color}; --tilt:${tilt}">
+        <figure class="frame-shot">
+          <img src="${src}" alt="" loading="lazy" decoding="async">
+          <figcaption>${stop.name}</figcaption>
+        </figure>
+        <div class="frame-copy">
+          <label class="frame-check">
+            <input class="check" type="checkbox" data-id="${stop.id}" ${checked} aria-label="Отметить: ${stop.name}">
+          </label>
+          <p class="frame-kicker">${day.track} · ${n} · ${kinds[stop.kind] || stop.kind} · ${stop.dur}</p>
+          <p class="frame-note">${stop.note}</p>
+        </div>
+      </article>`;
+  }
+
+  function reelMarkup(stops, day, startIndex) {
+    const last = stops[stops.length - 1];
+    const src = photoUrl(day.photo);
+    const names = stops.map((s) => s.name).join(" · ");
+    return `
+      <article class="frame frame--reel" data-day="${day.id}" data-photo="${src}" data-kind="${stops[0].kind}"
+        data-lat="${last.lat}" data-lng="${last.lng}" data-now="${escapeAttr(names)}"
+        style="--day:${day.color}">
+        <div class="frame-cluster">
+          ${stops.map((s, k) => ticketMarkup(s, day, startIndex + k)).join("")}
+        </div>
+      </article>`;
+  }
+
+  function renderPlan() {
+    const ov = TRIP.overview;
+    const hero = photoUrl("road") || TRIP.photos.kotor;
+    const overviewHtml = `
+      <article class="frame frame--over" id="overview"
+        data-day="overview" data-photo="${hero}" data-kind="vista"
+        data-lat="${ov.points[0].lat}" data-lng="${ov.points[0].lng}"
+        data-now="вся плёнка" style="--day:${ov.color}; --tilt:-1.6">
+        <figure class="frame-shot">
+          <img src="${hero}" alt="" decoding="async">
+          <figcaption>шесть дней, одна сторона</figcaption>
+        </figure>
+        <header class="frame-copy">
+          <p class="frame-kicker">${ov.slug}</p>
+          <h2>${ov.title}</h2>
+          <p class="frame-note">${ov.summary}</p>
+          <ol class="spine">
+            ${ov.points
+              .map(
+                (p) => `
+              <li data-go="${p.id === "ov-tgd" || p.id === "ov-pg" ? "sep5" : p.id === "ov-kotor" ? "sep6" : p.id === "ov-park" ? "sep8" : "sep10"}">
+                <span class="n">${p.n}</span>
+                <div><h3>${p.name}</h3><p>${p.place}</p></div>
+              </li>`
+              )
+              .join("")}
+          </ol>
+        </header>
+      </article>`;
+
+    const daysHtml = TRIP.days
+      .map((day) => {
+        const src = photoUrl(day.photo);
+        const first = day.stops[0];
+        const chapter = `
+          <article class="frame frame--day" id="${day.id}"
+            data-day="${day.id}" data-photo="${src}" data-kind="day"
+            data-lat="${first.lat}" data-lng="${first.lng}" data-now="${escapeAttr(day.title)}"
+            style="--day:${day.color}; --tilt:${day.hwy % 2 ? -2.2 : 2}">
+            <figure class="frame-shot">
+              <img src="${src}" alt="${day.caption}" loading="lazy" decoding="async">
               <figcaption>${day.caption}</figcaption>
             </figure>
-            <blockquote class="liner">${day.quote}</blockquote>
-            <p class="summary">${day.summary}</p>
-          </div>
-          <div class="stops">${stops}</div>
-        </section>`;
-        })
-        .join("");
+            <header class="frame-copy">
+              <p class="frame-kicker">${day.track} · ${day.date} · ${day.weekday}</p>
+              <h2>${day.title}</h2>
+              <p class="frame-lead">${day.slug}</p>
+              <p class="frame-chips"><span>${day.drive}</span><span>${day.hours}</span></p>
+            </header>
+          </article>`;
+
+        const parts = [];
+        let buf = [];
+        let bufAt = 0;
+        day.stops.forEach((stop, i) => {
+          const shot = photoUrl(stop.photo);
+          if (shot) {
+            if (buf.length) {
+              parts.push(reelMarkup(buf, day, bufAt));
+              buf = [];
+            }
+            parts.push(shotMarkup(stop, day, i, shot));
+          } else {
+            if (!buf.length) bufAt = i;
+            buf.push(stop);
+          }
+        });
+        if (buf.length) parts.push(reelMarkup(buf, day, bufAt));
+        return chapter + parts.join("");
+      })
+      .join("");
+
+    $("#plan").innerHTML = overviewHtml + daysHtml;
   }
 
   function renderStays() {
@@ -141,19 +239,8 @@
 
   function renderTape() {
     $("#tracks").innerHTML = TRIP.mixtape
-      .map(
-        (t) => `<li><b>${t.n}</b><span>${t.title}<br><small>${t.artist}</small></span></li>`
-      )
+      .map((t) => `<li><b>${t.n}</b><span>${t.title}<br><small>${t.artist}</small></span></li>`)
       .join("");
-  }
-
-  function renderNav() {
-    const ov = `<a href="#overview" data-day="overview" title="Весь маршрут">◯</a>`;
-    $("#days-nav").innerHTML =
-      ov +
-      TRIP.days
-        .map((d) => `<a href="#${d.id}" data-day="${d.id}" title="${d.date}">${d.date.split(" ")[0]}</a>`)
-        .join("");
   }
 
   const FX = (() => {
@@ -246,8 +333,8 @@
       el.style.left = x + "vw";
       el.style.top = (opts.y ?? 12 + Math.random() * 70) + "vh";
       el.style.setProperty("--dur", (opts.dur || 5.5 + Math.random() * 4) + "s");
-      el.style.setProperty("--dx", (Math.random() * 36 - 18) + "px");
-      el.style.setProperty("--rot", (Math.random() * 70 - 35) + "deg");
+      el.style.setProperty("--dx", Math.random() * 36 - 18 + "px");
+      el.style.setProperty("--rot", Math.random() * 70 - 35 + "deg");
       el.style.fontSize = (opts.size || (kind === "note" ? 22 : 16) + Math.random() * 14) + "px";
       layer.appendChild(el);
       while (layer.childElementCount > 90) layer.firstChild.remove();
@@ -275,6 +362,7 @@
 
     function travelOn() {
       travel = 1;
+      traveling = true;
       document.body.classList.add("is-traveling");
       kickTick();
       if (reduced()) return;
@@ -282,15 +370,7 @@
       sparkIv = window.setInterval(() => {
         const compact = isCompact();
         const roll = Math.random();
-        const kind = compact
-          ? roll > 0.5
-            ? "star"
-            : "snow"
-          : roll > 0.55
-            ? "star"
-            : roll > 0.22
-              ? "snow"
-              : "spark";
+        const kind = compact ? (roll > 0.5 ? "star" : "snow") : roll > 0.55 ? "star" : roll > 0.22 ? "snow" : "spark";
         spawn(kind);
         if (!compact && Math.random() > 0.4) spawn("star");
         if (!compact && Math.random() > 0.55) spawn("snow");
@@ -300,6 +380,7 @@
 
     function travelOff() {
       travel = 0;
+      traveling = false;
       document.body.classList.remove("is-traveling");
       window.clearInterval(sparkIv);
     }
@@ -315,11 +396,9 @@
     }
 
     function caption(text) {
-      const el = $("#map-arrive");
+      const el = $("#stage-caption");
       if (!el) return;
       el.textContent = text;
-      el.classList.add("is-on");
-      window.setTimeout(() => el.classList.remove("is-on"), 1500);
     }
 
     function clack() {
@@ -366,40 +445,13 @@
     return { init, spawn, rainNotes, travelOn, travelOff, flash, caption, clack, startAmbient };
   })();
 
-  let map;
-  let carMarker;
-  let streets;
-  let sat;
-  const markers = {};
-  let activeDay = null;
-  let activeStop = null;
-  let ghostLine = null;
-  let activeLine = null;
-  let driveRaf = 0;
-  let driveToken = 0;
-  let traveling = false;
-  const routes = {};
-  const ovMarkers = [];
-  let dayFollow = false;
-  let followCam = null;
-  let carFlip = 1;
-  let carFlipHold = 0;
-  let tapeFollowDrive = false;
-  const stopEls = {};
-  let activeStopEl = null;
-  let spy = null;
-  let spyRatios = new Map();
-  let spyTick = 0;
-  let fitLock = 0;
-  let userPaused = false;
-  let dockedDeck = false;
-
   const TAPE = (() => {
-    const TARGET_VOL = 0.7;
+    const TARGET_VOL = 0.72;
     let audio = null;
     let unlocked = false;
     let wantPlay = false;
     let fadeRaf = 0;
+    let armed = false;
 
     function node() {
       if (audio) return audio;
@@ -433,50 +485,44 @@
       fadeRaf = requestAnimationFrame(tick);
     }
 
-    async function unlock() {
-      if (unlocked) return true;
-      const a = node();
-      try {
-        a.muted = true;
-        a.volume = 0;
-        await a.play();
-        a.pause();
-        a.currentTime = 0;
-        a.muted = false;
-        unlocked = true;
-        return true;
-      } catch (_) {
-        a.muted = false;
-        return false;
-      }
-    }
-
     function armUnlock() {
-      const once = { once: true, passive: true };
+      if (armed) return;
+      armed = true;
       const kick = () => {
-        unlock().then((ok) => {
-          if (ok && wantPlay) play();
-        });
+        armed = false;
+        if (userPaused) return;
+        if (wantPlay || inserted) play();
       };
-      window.addEventListener("pointerdown", kick, once);
-      window.addEventListener("keydown", kick, once);
-      window.addEventListener("wheel", kick, once);
-      window.addEventListener("touchstart", kick, once);
+      ["pointerdown", "keydown", "wheel", "touchstart"].forEach((ev) => {
+        window.addEventListener(ev, kick, { once: true, capture: true, passive: true });
+      });
     }
 
     function init() {
-      node();
+      const a = node();
+      a.volume = TARGET_VOL;
+      try {
+        a.load();
+      } catch (_) {
+        /* ignore */
+      }
       armUnlock();
     }
 
     async function play() {
       wantPlay = true;
       const a = node();
+      if (!a.paused && unlocked) {
+        document.body.classList.add("is-playing");
+        document.body.classList.remove("is-paused");
+        syncPlayButtons();
+        return true;
+      }
+      a.muted = false;
+      if (a.volume < 0.18) a.volume = 0.22;
       try {
-        if (!unlocked) await unlock();
-        a.muted = false;
         const p = a.play();
-        fadeVolume(TARGET_VOL, a.paused || a.volume < 0.05 ? 700 : 180);
+        fadeVolume(TARGET_VOL, 480);
         await p;
         unlocked = true;
         document.body.classList.add("is-playing");
@@ -511,33 +557,21 @@
       return wantPlay && !a.paused;
     }
 
-    return { init, play, pause, stop, unlock, isPlaying };
+    function wantsPlay() {
+      return wantPlay;
+    }
+
+    return { init, play, pause, stop, isPlaying, wantsPlay };
   })();
 
-  function pinIcon(label, color) {
-    return L.divIcon({
-      className: "pin-icon",
-      html: `<div class="pin" style="--c:${color}"><span>${label}</span></div>`,
-      iconSize: [28, 28],
-      iconAnchor: [4, 26],
-      popupAnchor: [10, -24],
-    });
-  }
-
-  function offsetCoord(lat, lng, n) {
-    if (!n) return [lat, lng];
-    const a = n * 1.15;
-    return [lat + Math.cos(a) * 0.014 * n, lng + Math.sin(a) * 0.018 * n];
-  }
-
-  function densify(latlngs, n = 90) {
+  function densify(latlngs, per = 10) {
+    if (!latlngs || latlngs.length < 2) return latlngs ? latlngs.slice() : [];
     const out = [];
     for (let i = 0; i < latlngs.length - 1; i++) {
       const a = latlngs[i];
       const b = latlngs[i + 1];
-      const steps = Math.max(2, Math.round(n / (latlngs.length - 1)));
-      for (let s = 0; s < steps; s++) {
-        const t = s / steps;
+      for (let s = 0; s < per; s++) {
+        const t = s / per;
         out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
       }
     }
@@ -545,108 +579,26 @@
     return out;
   }
 
-  function dayOf(id) {
-    return TRIP.days.find((d) => d.id === id);
+  function project(lat, lng) {
+    const x = 22 + ((lng - 18.38) / (20.22 - 18.38)) * 196;
+    const y = 18 + (1 - (lat - 41.85) / (43.58 - 41.85)) * 284;
+    return [x, y];
   }
 
-  function stopOf(id) {
-    for (const day of TRIP.days) {
-      const s = day.stops.find((st) => st.id === id);
-      if (s) return { stop: s, day };
-    }
-    return null;
+  function ptsPath(pts) {
+    return pts
+      .map((p, i) => {
+        const [x, y] = project(p[0], p[1]);
+        return `${i ? "L" : "M"}${x.toFixed(2)},${y.toFixed(2)}`;
+      })
+      .join(" ");
   }
 
-  function isOverview() {
-    return activeDay === "overview";
-  }
-
-  function dedupePts(pts, eps = 0.0007) {
-    const out = [];
-    pts.forEach((p) => {
-      if (!out.length || !almost(out[out.length - 1], p, eps)) out.push(p);
-    });
-    return out;
-  }
-
-  function waypointsFor(day) {
-    if (day.id === "overview") return dedupePts(day.points.map((p) => [p.lat, p.lng]), 0.0002);
-    const pts = day.route && day.route.length > 1 ? day.route : day.stops.map((s) => [s.lat, s.lng]);
-    return dedupePts(pts);
-  }
-
-  function simplifyPts(pts, max = 700) {
-    if (pts.length <= max) return pts;
-    const step = (pts.length - 1) / (max - 1);
-    const out = [];
-    for (let i = 0; i < max - 1; i++) out.push(pts[Math.round(i * step)]);
-    out.push(pts[pts.length - 1]);
-    return out;
-  }
-
-  const OSRM_URLS = [
-    "https://router.project-osrm.org/route/v1/driving/",
-    "https://routing.openstreetmap.de/routed-car/route/v1/driving/",
-  ];
-
-  async function fetchOsrm(pts) {
-    if (pts.length < 2) return pts;
-    const coords = pts.map(([lat, lng]) => `${lng},${lat}`).join(";");
-    const q = "?overview=full&geometries=geojson&steps=false";
-    let lastErr;
-    for (const base of OSRM_URLS) {
-      try {
-        const res = await fetch(base + coords + q, { mode: "cors" });
-        if (!res.ok) continue;
-        const data = await res.json();
-        const geom = data?.routes?.[0]?.geometry?.coordinates;
-        if (!geom || geom.length < 2) continue;
-        return geom.map(([lng, lat]) => [lat, lng]);
-      } catch (err) {
-        lastErr = err;
-      }
-    }
-    throw lastErr || new Error("osrm");
-  }
-
-  function fallbackRoute(pts) {
-    return densify(pts, 120);
-  }
-
-  function denseRoute(day) {
-    const id = day.id || day;
-    if (routes[id]) return routes[id];
-    const obj = id === "overview" ? TRIP.overview : dayOf(id) || day;
-    return fallbackRoute(waypointsFor(obj));
-  }
-
-  async function loadRoute(day) {
-    const id = day.id;
-    const wps = waypointsFor(day);
-    if (!routes[id]) routes[id] = fallbackRoute(wps);
-    if (wps.length < 2) return routes[id];
-    try {
-      routes[id] = simplifyPts(await fetchOsrm(wps));
-      if (map) map.getContainer().dataset.osrm = id;
-      if (activeDay === id) paintCurrentLines();
-    } catch (_) {
-      routes[id] = fallbackRoute(wps);
-    }
-    return routes[id];
-  }
-
-  function prefetchRoutes() {
-    loadRoute(TRIP.overview);
-    TRIP.days.forEach((d, i) => {
-      window.setTimeout(() => loadRoute(d), 280 * (i + 1));
-    });
-  }
-
-  function nearestIndex(pts, ll) {
+  function nearestIndex(pts, lat, lng) {
     let bi = 0;
     let bd = Infinity;
     for (let i = 0; i < pts.length; i++) {
-      const d = (pts[i][0] - ll[0]) ** 2 + (pts[i][1] - ll[1]) ** 2;
+      const d = (pts[i][0] - lat) ** 2 + (pts[i][1] - lng) ** 2;
       if (d < bd) {
         bd = d;
         bi = i;
@@ -655,580 +607,211 @@
     return bi;
   }
 
-  function lerp(a, b, t) {
-    return a + (b - a) * t;
-  }
+  const FILM = (() => {
+    let frames = [];
+    let journey = [];
+    let drawPath = null;
+    let pathLen = 0;
+    let carEl = null;
+    let imgA = null;
+    let imgB = null;
+    let front = "a";
+    let currentSrc = "";
+    let carT = 0;
+    let ticking = false;
+    let glow = null;
 
-  function almost(a, b, eps = 0.0025) {
-    return Math.abs(a[0] - b[0]) < eps && Math.abs(a[1] - b[1]) < eps;
-  }
-
-  function segLen(a, b) {
-    return Math.hypot(b[0] - a[0], b[1] - a[1]);
-  }
-
-  function cumDist(pts) {
-    const c = new Float64Array(pts.length);
-    for (let i = 1; i < pts.length; i++) c[i] = c[i - 1] + segLen(pts[i - 1], pts[i]);
-    return c;
-  }
-
-  function sampleAlong(pts, cum, dist) {
-    const n = pts.length;
-    const total = cum[n - 1];
-    if (n < 2 || dist <= 0) return { ll: pts[0], i0: 0, i1: 1 };
-    if (dist >= total) return { ll: pts[n - 1], i0: n - 2, i1: n - 1 };
-    let lo = 0;
-    let hi = n - 1;
-    while (hi - lo > 1) {
-      const mid = (lo + hi) >> 1;
-      if (cum[mid] < dist) lo = mid;
-      else hi = mid;
+    function buildJourney() {
+      const pts = [];
+      TRIP.days.forEach((day) => {
+        const route = day.route && day.route.length > 1 ? day.route : day.stops.map((s) => [s.lat, s.lng]);
+        densify(route, 8).forEach((p) => pts.push(p));
+      });
+      journey = pts;
     }
-    const span = cum[hi] - cum[lo] || 1e-9;
-    const t = (dist - cum[lo]) / span;
-    return {
-      ll: [lerp(pts[lo][0], pts[hi][0], t), lerp(pts[lo][1], pts[hi][1], t)],
-      i0: lo,
-      i1: hi,
-    };
-  }
 
-  function easeAlong(t) {
-    if (t <= 0) return 0;
-    if (t >= 1) return 1;
-    const a = 0.18;
-    if (t < a) {
-      const u = t / a;
-      return a * u * u * (3 - 2 * u);
+    function paintBoard() {
+      const svg = $("#board-svg");
+      if (!svg) return;
+      const landD = ptsPath(LAND.concat([LAND[0]]));
+      const ghostD = ptsPath(journey);
+      const dayPaths = TRIP.days
+        .map((day) => {
+          const route = day.route && day.route.length > 1 ? day.route : day.stops.map((s) => [s.lat, s.lng]);
+          return `<path class="board-day" d="${ptsPath(densify(route, 6))}" stroke="${day.color}" />`;
+        })
+        .join("");
+      const labels = CITIES.map((c) => {
+        const [x, y] = project(c.lat, c.lng);
+        return `<text class="board-label" x="${x.toFixed(1)}" y="${(y - 6).toFixed(1)}">${c.name}</text>`;
+      }).join("");
+      svg.innerHTML = `
+        <defs>
+          <filter id="board-glow" x="-40%" y="-40%" width="180%" height="180%">
+            <feGaussianBlur stdDeviation="1.6" result="b"/>
+            <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+        </defs>
+        <path class="board-land" d="${landD}" />
+        <path class="board-ghost" d="${ghostD}" />
+        ${dayPaths}
+        <path class="board-draw" id="board-draw" d="${ghostD}" />
+        ${labels}
+        <g id="board-car" filter="url(#board-glow)">
+          <circle class="car-halo" r="9" />
+          <circle class="car-core" r="3.4" />
+        </g>`;
+      drawPath = $("#board-draw");
+      carEl = $("#board-car");
+      pathLen = drawPath ? drawPath.getTotalLength() : 0;
+      if (drawPath && pathLen) {
+        drawPath.style.strokeDasharray = String(pathLen);
+        drawPath.style.strokeDashoffset = String(pathLen);
+      }
+
+      const trace = $("#stage-trace");
+      if (trace) {
+        trace.innerHTML = `
+          <path class="trace-land" d="${landD}" />
+          <path class="trace-draw" d="${ghostD}" />`;
+      }
     }
-    if (t > 1 - a) {
-      const u = (1 - t) / a;
-      return 1 - a * u * u * (3 - 2 * u);
-    }
-    return t;
-  }
 
-  function setCarFlip(pts, i0) {
-    const wrap = carMarker?.getElement()?.querySelector(".car-rot");
-    if (!wrap || !pts || pts.length < 2) return;
-    const i1 = Math.min(pts.length - 1, i0 + 10);
-    const dx = pts[i1][1] - pts[i0][1];
-    if (Math.abs(dx) < 0.0002) return;
-    const next = dx > 0 ? -1 : 1;
-    if (next === carFlip) {
-      carFlipHold = 0;
-      return;
-    }
-    carFlipHold += 1;
-    if (carFlipHold < 8) return;
-    carFlip = next;
-    carFlipHold = 0;
-    wrap.style.transform = carFlip < 0 ? "scaleX(-1)" : "scaleX(1)";
-  }
-
-  function pathDuration(pts) {
-    if (!pts || pts.length < 2) return 800;
-    let d = 0;
-    for (let i = 1; i < pts.length; i++) d += segLen(pts[i - 1], pts[i]);
-    const ms = d * (isCompact() ? 3200 : 5200);
-    return Math.min(isCompact() ? 7000 : 11000, Math.max(1100, ms));
-  }
-
-  function resetFollowCam(ll) {
-    followCam = ll ? { lat: ll[0], lng: ll[1] } : null;
-  }
-
-  function keepCarInView(ll) {
-    if (!map || !dayFollow) return;
-    if (!followCam) {
-      followCam = { lat: ll[0], lng: ll[1] };
-    } else {
-      followCam.lat += (ll[0] - followCam.lat) * 0.16;
-      followCam.lng += (ll[1] - followCam.lng) * 0.16;
-    }
-    map.setView([followCam.lat, followCam.lng], map.getZoom(), { animate: false });
-  }
-
-  function buildPath(day, destLL) {
-    const dense = denseRoute(day);
-    const cur = carMarker.getLatLng();
-    const startLL = [cur.lat, cur.lng];
-    const iDest = nearestIndex(dense, destLL);
-    const iFrom = nearestIndex(dense, startLL);
-    const onRoute = almost(startLL, dense[iFrom], 0.08);
-    if (onRoute) {
-      if (iFrom === iDest) return [dense[iDest]];
-      return iFrom < iDest ? dense.slice(iFrom, iDest + 1) : dense.slice(iDest, iFrom + 1).reverse();
-    }
-    const onto = densify([startLL, dense[iFrom]], 24);
-    const along =
-      iFrom <= iDest ? dense.slice(iFrom, iDest + 1) : dense.slice(iDest, iFrom + 1).reverse();
-    return onto.concat(along.slice(1));
-  }
-
-  function updateProgressLine(day, carLL) {
-    const dense = denseRoute(day);
-    const idx = nearestIndex(dense, carLL);
-    if (ghostLine) ghostLine.setLatLngs(dense);
-    if (activeLine) {
-      if (dayFollow) activeLine.setLatLngs(dense.slice(0, Math.max(2, idx + 1)));
-      else activeLine.setLatLngs(dense);
-    }
-  }
-
-  function lineStyle(color, ghost) {
-    return {
-      color,
-      weight: ghost ? 3 : 4.5,
-      opacity: ghost ? 0.28 : 0.95,
-      lineCap: "round",
-      smoothFactor: 0,
-      className: ghost ? "route-ghost" : "route-active",
-    };
-  }
-
-  function paintCurrentLines() {
-    if (isOverview()) paintOverviewLines(false);
-    else {
-      const day = dayOf(activeDay);
-      if (day) paintDayLines(day, !dayFollow);
-    }
-  }
-
-  function paintOverviewLines(fit) {
-    const dense = denseRoute(TRIP.overview);
-    if (ghostLine) map.removeLayer(ghostLine);
-    if (activeLine) map.removeLayer(activeLine);
-    ghostLine = L.polyline(dense, lineStyle(TRIP.overview.color, true)).addTo(map);
-    activeLine = L.polyline(dense, lineStyle(TRIP.overview.color, false)).addTo(map);
-    if (!traveling) carMarker.setLatLng(dense[0]);
-    if (fit && dense.length) {
-      map.flyToBounds(L.latLngBounds(dense).pad(isCompact() ? 0.22 : 0.18), {
-        duration: isCompact() ? 0.7 : 1.05,
+    function assignT() {
+      frames = [...document.querySelectorAll(".frame")];
+      frames.forEach((el) => {
+        const lat = parseFloat(el.dataset.lat);
+        const lng = parseFloat(el.dataset.lng);
+        if (!journey.length || Number.isNaN(lat)) {
+          el.dataset.t = "0";
+          return;
+        }
+        const i = nearestIndex(journey, lat, lng);
+        el.dataset.t = (i / Math.max(1, journey.length - 1)).toFixed(4);
       });
     }
-  }
 
-  function paintDayLines(day, full = true) {
-    const dense = denseRoute(day);
-    if (ghostLine) map.removeLayer(ghostLine);
-    if (activeLine) map.removeLayer(activeLine);
-    ghostLine = L.polyline(dense, lineStyle(day.color, true)).addTo(map);
-    const cur = carMarker.getLatLng();
-    const idx = nearestIndex(dense, [cur.lat, cur.lng]);
-    activeLine = L.polyline(full ? dense : dense.slice(0, Math.max(2, idx + 1)), lineStyle(day.color, false)).addTo(
-      map
-    );
-  }
-
-  function routePad(sub) {
-    if (sub && sub.id === "overview") return isCompact() ? 0.22 : 0.18;
-    return isCompact() ? 0.42 : 0.28;
-  }
-
-  function fitSubject(sub, duration) {
-    const pts = denseRoute(sub);
-    if (!pts.length || !map) return;
-    const now = Date.now();
-    if (now < fitLock) return;
-    fitLock = now + 520;
-    const dur = duration ?? (isCompact() ? 0.6 : 0.75);
-    if (reduced()) {
-      map.fitBounds(L.latLngBounds(pts).pad(routePad(sub)));
-      return;
+    function focusOf(el) {
+      const r = el.getBoundingClientRect();
+      const mid = (r.top + r.bottom) / 2;
+      const c = window.innerHeight * 0.5;
+      const span = window.innerHeight * 0.58;
+      return smoothstep(1 - Math.min(1, Math.abs(mid - c) / span));
     }
-    map.flyToBounds(L.latLngBounds(pts).pad(routePad(sub)), { duration: dur });
-  }
 
-  function setDayChrome(id, stopId = null, nowText = null) {
-    activeDay = id;
-    setNav(id);
-    const now = $("#map-now");
-    if (now) {
-      if (nowText) now.textContent = nowText;
-      else if (id === "overview") now.textContent = "весь маршрут · аэропорт → Дурмитор → аэропорт";
-      else {
-        const day = dayOf(id);
-        if (day) now.textContent = `${day.track} · весь маршрут · ${day.title}`;
+    function setBg(src) {
+      if (!src || src === currentSrc || !imgA || !imgB) return;
+      const back = front === "a" ? imgB : imgA;
+      const fore = front === "a" ? imgA : imgB;
+      if (back.getAttribute("src") !== src) back.src = src;
+      back.classList.add("is-on");
+      fore.classList.remove("is-on");
+      front = front === "a" ? "b" : "a";
+      currentSrc = src;
+    }
+
+    function placeCar(t) {
+      if (!drawPath || !carEl) return;
+      if (!pathLen) {
+        pathLen = drawPath.getTotalLength();
+        if (pathLen) {
+          drawPath.style.strokeDasharray = String(pathLen);
+        }
       }
-    }
-    applyMarkerFocus(id, stopId);
-  }
-
-  function markStop(id) {
-    if (activeStopEl) activeStopEl.classList.remove("is-on");
-    activeStopEl = id ? stopEls[id] || document.getElementById("stop-" + id) : null;
-    if (activeStopEl) {
-      activeStopEl.classList.add("is-on");
-      stopEls[id] = activeStopEl;
-    }
-  }
-
-  function currentSubject() {
-    return isOverview() ? TRIP.overview : dayOf(activeDay);
-  }
-
-  function finishTravel(onDone) {
-    traveling = false;
-    tapeFollowDrive = false;
-    FX.travelOff();
-    syncPlayButtons();
-    onDone?.();
-  }
-
-  function driveAlong(pts, opts = {}) {
-    const { onDone, pan = false, notes = false, zoomAfter = null, scenic = false } = opts;
-    driveToken += 1;
-    const token = driveToken;
-    if (driveRaf) cancelAnimationFrame(driveRaf);
-    if (!pts || pts.length < 2) {
-      if (pts?.[0]) {
-        carMarker.setLatLng(pts[0]);
-        const sub = currentSubject();
-        if (sub) updateProgressLine(sub, pts[0]);
-      }
-      if (scenic) finishTravel(onDone);
-      else onDone?.();
-      return;
-    }
-    if (scenic) {
-      traveling = true;
-      FX.travelOn();
-      syncPlayButtons();
-    }
-    if (notes) FX.rainNotes(Math.min(3200, pathDuration(pts)));
-    if (reduced()) {
-      const last = pts[pts.length - 1];
-      carMarker.setLatLng(last);
-      const sub = currentSubject();
-      if (sub) updateProgressLine(sub, last);
-      if (scenic) finishTravel(onDone);
-      else onDone?.();
-      return;
-    }
-    const cum = cumDist(pts);
-    const total = cum[cum.length - 1] || 1e-9;
-    const t0 = performance.now();
-    const dur = opts.duration || Math.min(scenic ? pathDuration(pts) : 1800, pathDuration(pts));
-    carFlipHold = 0;
-    resetFollowCam(pts[0]);
-    let lineTick = 0;
-    function tick(now) {
-      if (token !== driveToken) {
-        const hud = $("#play-route");
-        if (hud) hud.textContent = "Проиграть сторону";
-        tapeFollowDrive = false;
-        syncPlayButtons();
-        return;
-      }
-      const t = Math.min(1, (now - t0) / dur);
-      const { ll, i0 } = sampleAlong(pts, cum, easeAlong(t) * total);
-      carMarker.setLatLng(ll);
-      setCarFlip(pts, i0);
-      const sub = currentSubject();
-      if (sub && (t >= 1 || (lineTick++ & 3) === 0)) updateProgressLine(sub, ll);
-      if (pan) keepCarInView(ll);
-      if (tapeFollowDrive) setTapeProgress(easeAlong(t));
-      if (t < 1) {
-        driveRaf = requestAnimationFrame(tick);
-      } else {
-        if (sub) updateProgressLine(sub, ll);
-        if (scenic && opts.flash !== false && pts.length > 10) FX.flash();
-        if (zoomAfter) map.flyTo(pts[pts.length - 1], zoomAfter, { duration: 0.85 });
-        if (scenic) finishTravel(onDone);
-        else onDone?.();
-      }
-    }
-    driveRaf = requestAnimationFrame(tick);
-  }
-
-  function applyMarkerFocus(id, stopId) {
-    const ov = id === "overview";
-    ovMarkers.forEach((m) => {
-      const el = m.getElement();
-      if (!el) return;
-      el.classList.toggle("is-off", !ov);
-      el.classList.toggle("is-on-day", ov);
-      el.classList.toggle("is-target", ov && stopId && m.ovId === stopId);
-    });
-    Object.values(markers).forEach((m) => {
-      const el = m.getElement();
-      if (!el) return;
-      const on = !ov && m.dayId === id;
-      el.classList.toggle("is-off", !on);
-      el.classList.toggle("is-on-day", on);
-      el.classList.toggle("is-target", !!(stopId && m.stopId === stopId && on));
-      if (!on) m.closePopup();
-    });
-  }
-
-  function setNav(id) {
-    document.querySelectorAll(".days-nav a").forEach((a) => {
-      a.classList.toggle("is-on", a.dataset.day === id);
-    });
-    document.querySelectorAll(".day").forEach((el) => {
-      el.classList.toggle("is-current", el.id === id);
-    });
-  }
-
-  function showOverview(opts = {}) {
-    const { fly = true } = opts;
-    if (isOverview() && !fly) return;
-    dayFollow = false;
-    activeStop = null;
-    markStop(null);
-    traveling = false;
-    driveToken += 1;
-    resetFollowCam(null);
-    setDayChrome("overview");
-    paintOverviewLines(fly);
-    loadRoute(TRIP.overview);
-  }
-
-  function revealDay(id, opts = {}) {
-    const { fit = true } = opts;
-    const day = dayOf(id);
-    if (!day) return;
-    const switched = id !== activeDay;
-    if (!switched && !activeStop && !dayFollow) return;
-    activeDay = id;
-    if (switched || activeStop) {
-      dayFollow = false;
-      activeStop = null;
-      markStop(null);
-      resetFollowCam(null);
-      const dense = denseRoute(day);
-      if (!traveling) carMarker.setLatLng(dense[0]);
-      paintDayLines(day, true);
-      loadRoute(day);
-      setDayChrome(id);
-      if (fit) fitSubject(day, switched ? 0.7 : 0.5);
-    }
-  }
-
-  function focusStop(id, opts = {}) {
-    const { fromScroll = false, fly = false } = opts;
-    const found = stopOf(id);
-    if (!found) return;
-    const { stop, day } = found;
-    if (id === activeStop && day.id === activeDay) return;
-
-    if (day.id !== activeDay) {
-      activeDay = day.id;
-      paintDayLines(day, true);
-      loadRoute(day);
-      if (fromScroll) fitSubject(day, 0.55);
+      if (!pathLen) return;
+      const p = drawPath.getPointAtLength(t * pathLen);
+      carEl.setAttribute("transform", `translate(${p.x.toFixed(2)} ${p.y.toFixed(2)})`);
+      drawPath.style.strokeDashoffset = String(pathLen * (1 - t));
     }
 
-    activeStop = id;
-    dayFollow = true;
-    markStop(id);
-    applyMarkerFocus(day.id, id);
-    const now = $("#map-now");
-    if (now) now.textContent = `${day.track} · ${stop.name}`;
-
-    const dest = [stop.lat, stop.lng];
-    const cur = carMarker.getLatLng();
-    if (almost([cur.lat, cur.lng], dest, 0.004)) return;
-
-    const path = buildPath(day, dest);
-    driveAlong(path, {
-      pan: fly && !fromScroll,
-      scenic: fly && !fromScroll,
-      onDone: () => {
-        if (!fromScroll) FX.caption(stop.name);
-        applyMarkerFocus(day.id, id);
-        if (!fromScroll && fly && !isCompact()) markers[id]?.openPopup();
-      },
-    });
-  }
-
-  function applyMapTouchMode() {
-    if (!map) return;
-    const compact = isCompact();
-    const toggle = (handler, on) => {
-      if (!handler) return;
-      if (on) handler.enable();
-      else handler.disable();
-    };
-    toggle(map.dragging, !compact);
-    toggle(map.touchZoom, false);
-    toggle(map.scrollWheelZoom, false);
-    toggle(map.doubleClickZoom, false);
-    toggle(map.keyboard, false);
-    map.invalidateSize();
-  }
-
-  function refreshMapSize() {
-    if (!map) return;
-    map.invalidateSize({ animate: false });
-  }
-
-  function initMap() {
-    const compact = isCompact();
-    map = L.map("map", {
-      zoomControl: false,
-      attributionControl: true,
-      scrollWheelZoom: false,
-      dragging: !compact,
-      touchZoom: false,
-      doubleClickZoom: false,
-      boxZoom: false,
-      keyboard: false,
-    }).setView([42.44, 19.26], compact ? 8.5 : 10);
-
-    L.control.zoom({ position: "topright" }).addTo(map);
-    map.getContainer().addEventListener(
-      "wheel",
-      (e) => {
-        e.preventDefault();
-        if (e.ctrlKey || e.metaKey) return;
-        window.scrollBy(e.deltaX, e.deltaY);
-      },
-      { passive: false }
-    );
-
-    streets = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: "&copy; OpenStreetMap",
-      maxZoom: 19,
-    });
-    sat = L.tileLayer(
-      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-      { attribution: "Tiles &copy; Esri", maxZoom: 19 }
-    );
-    streets.addTo(map);
-
-    const seen = {};
-    TRIP.days.forEach((day) => {
-      day.stops.forEach((stop) => {
-        const key = `${stop.lat.toFixed(3)},${stop.lng.toFixed(3)}`;
-        seen[key] = (seen[key] || 0) + 1;
-        const [lat, lng] = offsetCoord(stop.lat, stop.lng, seen[key] - 1);
-        const m = L.marker([lat, lng], {
-          icon: pinIcon(day.hwy.replace(/^0/, ""), day.color),
-        }).bindPopup(
-          `<div class="pop"><h3>${stop.name}</h3><p>${day.track} · ${day.date}</p><p>${stop.note}</p></div>`
-        );
-        m.dayId = day.id;
-        m.stopId = stop.id;
-        m.on("click", () => focusStop(stop.id, { fly: true, fromScroll: false }));
-        markers[stop.id] = m;
-        m.addTo(map);
+    function tick() {
+      ticking = false;
+      if (!frames.length) return;
+      const vh = window.innerHeight;
+      let best = 0;
+      let bestF = -1;
+      frames.forEach((el, i) => {
+        const r = el.getBoundingClientRect();
+        if (r.bottom < -40 || r.top > vh + 40) {
+          el.style.setProperty("--focus", "0");
+          return;
+        }
+        const f = reduced() ? (Math.abs((r.top + r.bottom) / 2 - vh * 0.5) < vh * 0.45 ? 1 : 0.35) : focusOf(el);
+        el.style.setProperty("--focus", f.toFixed(3));
+        if (f > bestF) {
+          bestF = f;
+          best = i;
+        }
       });
-    });
 
-    TRIP.overview.points.forEach((p, i) => {
-      const [lat, lng] = offsetCoord(p.lat, p.lng, i > 3 ? 1 : 0);
-      const m = L.marker([lat, lng], {
-        icon: pinIcon(p.n.replace(/^0/, ""), TRIP.overview.color),
-      }).bindPopup(`<div class="pop"><h3>${p.name}</h3><p>${p.place}</p></div>`);
-      m.ovId = p.id;
-      m.on("click", () => {
-        if (!isOverview()) showOverview({ fly: false });
-        document.querySelectorAll(".spine li").forEach((el) => {
-          el.classList.toggle("is-on", el.dataset.ov === p.id);
+      const el = frames[best];
+      if (!el) return;
+      const day = el.dataset.day || "overview";
+      if (day !== activeDay) {
+        activeDay = day;
+        document.querySelectorAll("#days-nav a").forEach((a) => {
+          a.classList.toggle("is-on", a.dataset.day === day);
         });
-        applyMarkerFocus("overview", p.id);
-        m.openPopup();
-      });
-      ovMarkers.push(m);
-      m.addTo(map);
-    });
+        if (lastDayFlash && lastDayFlash !== day && el.classList.contains("frame--day")) FX.flash();
+        lastDayFlash = day;
+      }
 
-    carMarker = L.marker([TRIP.overview.points[0].lat, TRIP.overview.points[0].lng], {
-      icon: L.divIcon({
-        className: "car-marker",
-        html: '<div class="car-rot"><span class="car-emoji">🚗</span></div>',
-        iconSize: [32, 32],
-        iconAnchor: [16, 16],
-      }),
-      zIndexOffset: 1000,
-    }).addTo(map);
+      const now = el.dataset.now || "";
+      const nowEl = $("#board-now");
+      if (nowEl && nowEl.textContent !== now) nowEl.textContent = now;
+      const playEl = $("#now-play");
+      if (playEl) {
+        const dayObj = TRIP.days.find((d) => d.id === day);
+        playEl.textContent = dayObj ? `▶ ${dayObj.track}` : "▶ SIDE A";
+      }
+      FX.caption(now);
 
-    setTimeout(() => {
-      refreshMapSize();
-      showOverview({ fly: true });
-      prefetchRoutes();
-    }, 300);
-  }
+      setBg(el.dataset.photo || currentSrc);
 
-  function playRoute() {
-    if (traveling) return;
-    if (isOverview()) {
-      const pts = denseRoute(TRIP.overview);
-      const hud = $("#play-route");
-      carMarker.setLatLng(pts[0]);
-      if (hud) hud.textContent = "Идёт сторона…";
-      dayFollow = true;
-      tapeFollowDrive = true;
-      userPaused = false;
-      document.body.classList.add("is-playing");
-      document.body.classList.remove("is-paused");
-      FX.rainNotes(1800);
-      const dur = Math.min(18000, Math.max(5200, pathDuration(pts) * 1.25));
-      syncPlayButtons();
-      driveAlong(pts, {
-        duration: dur,
-        pan: true,
-        notes: true,
-        scenic: true,
-        onDone: () => {
-          if (hud) hud.textContent = "Проиграть сторону";
-          dayFollow = false;
-          map.flyToBounds(L.latLngBounds(pts).pad(0.2), { duration: 0.8 });
-        },
-      });
-      return;
+      const kind = el.dataset.kind;
+      const shouldTravel = kind === "drive" || el.classList.contains("frame--reel");
+      if (shouldTravel) FX.travelOn();
+      else FX.travelOff();
+
+      const t0 = parseFloat(el.dataset.t) || 0;
+      carT += (t0 - carT) * (reduced() ? 1 : 0.18);
+      placeCar(clamp01(carT));
+      updateTapeProgress();
     }
-    const day = dayOf(activeDay);
-    if (!day) return;
-    const hud = $("#play-route");
-    const pts = denseRoute(day);
-    carMarker.setLatLng(pts[0]);
-    if (hud) hud.textContent = "Идёт сторона…";
-    dayFollow = true;
-    tapeFollowDrive = false;
-    userPaused = false;
-    document.body.classList.add("is-playing");
-    document.body.classList.remove("is-paused");
-    FX.rainNotes(2200);
-    const dur = Math.min(14000, Math.max(3600, pathDuration(pts) * 1.2));
-    syncPlayButtons();
-    driveAlong(pts, {
-      duration: dur,
-      pan: true,
-      notes: true,
-      scenic: true,
-      onDone: () => {
-        if (hud) hud.textContent = "Проиграть сторону";
-        map.flyToBounds(L.latLngBounds(pts).pad(0.28), { duration: 0.8 });
-      },
-    });
-  }
 
-  function fitActiveDay() {
-    if (isOverview()) {
-      dayFollow = false;
-      const pts = denseRoute(TRIP.overview);
-      map.flyToBounds(L.latLngBounds(pts).pad(0.2), { duration: 0.9 });
-      return;
+    function onScroll() {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(tick);
     }
-    const day = dayOf(activeDay);
-    if (!day) return;
-    dayFollow = false;
-    const pts = denseRoute(day);
-    carMarker.setLatLng(pts[0]);
-    paintDayLines(day, true);
-    map.flyToBounds(L.latLngBounds(pts).pad(0.28), { duration: 0.9 });
-  }
 
-  function clamp01(v) {
-    return Math.min(1, Math.max(0, v));
-  }
+    function init() {
+      imgA = $("#stage-a");
+      imgB = $("#stage-b");
+      glow = $("#scroll-glow");
+      buildJourney();
+      paintBoard();
+      assignT();
+      const first = photoUrl("road") || TRIP.photos.kotor;
+      if (imgA && first) {
+        imgA.src = first;
+        imgA.classList.add("is-on");
+        currentSrc = first;
+      }
+      window.addEventListener("scroll", onScroll, { passive: true });
+      window.addEventListener("resize", onScroll);
+      requestAnimationFrame(tick);
+    }
 
-  function smoothstep(t) {
-    return t * t * (3 - 2 * t);
+    return { init, tick };
+  })();
+
+  function cassetteProgress() {
+    const hero = $("#hero");
+    if (!hero) return 1;
+    const total = hero.offsetHeight - window.innerHeight;
+    const rect = hero.getBoundingClientRect();
+    return clamp01(total > 0 ? -rect.top / total : 0);
   }
 
   function setTapeProgress(t) {
@@ -1238,127 +821,43 @@
   }
 
   function updateTapeProgress() {
-    if (tapeFollowDrive) return;
-    const road = $("#map-section");
-    const last = document.querySelector(".day:not(.overview-day):last-of-type");
-    if (!road || !last) {
-      setTapeProgress(0);
+    const hero = $("#hero");
+    const film = $("#film");
+    if (!hero || !film) return;
+    const hr = hero.getBoundingClientRect();
+    if (hr.bottom > 100) {
+      setTapeProgress(cassetteProgress() * 0.1);
       return;
     }
-    const start = road.offsetTop - window.innerHeight * 0.15;
-    const end = last.offsetTop + last.offsetHeight - window.innerHeight * 0.65;
-    setTapeProgress((window.scrollY - start) / Math.max(1, end - start));
-  }
-
-  function spyMargin() {
-    if (isCompact()) {
-      const atlas = $(".atlas");
-      const top = atlas ? Math.round(atlas.getBoundingClientRect().bottom + 10) : 280;
-      const band = 120;
-      const bot = Math.max(48, Math.round(window.innerHeight - top - band));
-      return `-${top}px 0px -${bot}px 0px`;
+    const top = film.offsetTop - window.innerHeight * 0.12;
+    const end = film.offsetTop + film.offsetHeight - window.innerHeight * 0.7;
+    setTapeProgress(0.1 + 0.9 * clamp01((window.scrollY - top) / Math.max(1, end - top)));
+    const glow = $("#scroll-glow");
+    if (glow) {
+      const on = hr.bottom < 80 && film.getBoundingClientRect().bottom > 120;
+      glow.classList.toggle("is-on", on);
     }
-    return "-28% 0px -56% 0px";
-  }
-
-  function applySpy() {
-    let bestStop = null;
-    let stopR = 0;
-    let bestLead = null;
-    let leadR = 0;
-    let ov = 0;
-    spyRatios.forEach((r, el) => {
-      if (!r) return;
-      if (el.classList.contains("stop")) {
-        if (r > stopR) {
-          stopR = r;
-          bestStop = el;
-        }
-      } else if (el.id === "overview") {
-        ov = r;
-      } else if (el.classList.contains("day-lead")) {
-        if (r > leadR) {
-          leadR = r;
-          bestLead = el;
-        }
-      }
-    });
-    if (ov > 0.18 && ov >= stopR && ov >= leadR) {
-      showOverview({ fly: activeDay !== "overview" });
-      return;
-    }
-    if (bestStop && stopR > 0.08 && stopR >= leadR) {
-      focusStop(bestStop.dataset.stop, { fromScroll: true });
-      return;
-    }
-    if (bestLead && leadR > 0.08) {
-      const dayEl = bestLead.closest(".day");
-      if (dayEl) revealDay(dayEl.id);
-    }
-  }
-
-  function initScrollSpy() {
-    if (spy) spy.disconnect();
-    spyRatios = new Map();
-    spy = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((e) => spyRatios.set(e.target, e.isIntersecting ? e.intersectionRatio : 0));
-        if (spyTick) return;
-        spyTick = requestAnimationFrame(() => {
-          spyTick = 0;
-          applySpy();
-        });
-      },
-      {
-        root: null,
-        rootMargin: spyMargin(),
-        threshold: [0, 0.12, 0.28, 0.5, 0.75, 1],
-      }
-    );
-    const overview = $("#overview");
-    if (overview) spy.observe(overview);
-    document.querySelectorAll(".day-lead, .stop").forEach((el) => spy.observe(el));
-  }
-
-  function cacheStopEls() {
-    document.querySelectorAll(".stop[data-stop]").forEach((el) => {
-      stopEls[el.dataset.stop] = el;
-    });
   }
 
   function syncPlayButtons() {
-    const on = traveling || TAPE.isPlaying();
+    const on = TAPE.isPlaying();
     const label = on ? "❚❚" : "▶";
     document.querySelectorAll(".js-tape-play").forEach((btn) => {
       btn.textContent = label;
       btn.setAttribute("aria-label", on ? "Пауза" : "Play");
     });
-    const hud = $("#play-route");
-    if (hud && !traveling && hud.textContent === "Идёт сторона…") {
-      hud.textContent = "Проиграть сторону";
-    }
   }
 
   function stopTape() {
-    driveToken += 1;
-    traveling = false;
-    tapeFollowDrive = false;
     FX.travelOff();
     userPaused = true;
     TAPE.stop();
     document.body.classList.remove("is-playing");
     document.body.classList.add("is-paused");
-    const hud = $("#play-route");
-    if (hud) hud.textContent = "Проиграть сторону";
     syncPlayButtons();
-    updateTapeProgress();
   }
 
   function togglePlay() {
-    if (traveling) {
-      stopTape();
-      return;
-    }
     if (TAPE.isPlaying()) {
       userPaused = true;
       TAPE.pause();
@@ -1368,8 +867,6 @@
       return;
     }
     userPaused = false;
-    document.body.classList.add("is-playing");
-    document.body.classList.remove("is-paused");
     TAPE.play();
     syncPlayButtons();
   }
@@ -1380,16 +877,8 @@
 
   function goToDay(id) {
     const el = document.getElementById(id);
-    driveToken += 1;
-    traveling = false;
-    tapeFollowDrive = false;
-    FX.travelOff();
-    if (el) el.scrollIntoView({ behavior: "instant", block: "start" });
-    if (id === "overview") showOverview({ fly: true });
-    else revealDay(id, { fit: true });
+    if (el) el.scrollIntoView({ behavior: reduced() ? "auto" : "smooth", block: "center" });
     history.replaceState(null, "", "#" + id);
-    syncPlayButtons();
-    updateTapeProgress();
   }
 
   function skipDay(dir) {
@@ -1404,7 +893,12 @@
     if (on === dockedDeck) return;
     dockedDeck = on;
     document.documentElement.classList.toggle("deck-docked", on);
-    requestAnimationFrame(() => refreshMapSize());
+  }
+
+  function tryStartTape(e) {
+    if (userPaused) return;
+    if (e && e.target && e.target.closest && e.target.closest(".js-tape-play, [data-tape]")) return;
+    if (inserted || cassetteProgress() > 0.66) TAPE.play();
   }
 
   function initCassette() {
@@ -1463,6 +957,7 @@
       door.style.opacity = String(0.25 + d * 0.75);
 
       const playing = p > 0.66;
+      inserted = playing || dockedDeck;
       if (playing !== lastPlaying) {
         lastPlaying = playing;
         if (playing && !userPaused) document.body.classList.add("is-playing");
@@ -1471,6 +966,7 @@
       if (p > 0.66) setDeckDocked(true);
       else if (p < 0.18) {
         setDeckDocked(false);
+        inserted = false;
         if (fired) {
           TAPE.stop();
           userPaused = false;
@@ -1480,7 +976,6 @@
       if (playing && !fired) {
         fired = true;
         FX.startAmbient();
-        if (!userPaused) TAPE.play();
         if (!reduced()) {
           FX.clack();
           window.setTimeout(() => FX.clack(), 160);
@@ -1508,29 +1003,23 @@
 
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", onScroll);
+    window.addEventListener("pointerdown", tryStartTape, { capture: true, passive: true });
+    window.addEventListener("wheel", tryStartTape, { capture: true, passive: true });
+    window.addEventListener("touchstart", tryStartTape, { capture: true, passive: true });
+    window.addEventListener("keydown", tryStartTape, { capture: true });
     requestAnimationFrame(render);
   }
 
   function bind() {
-    $("#story").addEventListener("click", (e) => {
-      const ov = e.target.closest("[data-ov]");
-      if (ov) {
-        if (!isOverview()) showOverview({ fly: false });
-        const id = ov.dataset.ov;
-        document.querySelectorAll(".spine li").forEach((el) => {
-          el.classList.toggle("is-on", el.dataset.ov === id);
-        });
-        applyMarkerFocus("overview", id);
-        ovMarkers.find((m) => m.ovId === id)?.openPopup();
+    $("#plan").addEventListener("click", (e) => {
+      const go = e.target.closest("[data-go]");
+      if (go) {
+        goToDay(go.dataset.go);
         return;
       }
-      const stop = e.target.closest(".stop");
-      if (!stop || e.target.closest("a") || e.target.matches(".check")) return;
-      stop.scrollIntoView({ behavior: reduced() ? "auto" : "smooth", block: "center" });
-      focusStop(stop.dataset.stop, { fly: true, fromScroll: false });
     });
 
-    $("#story").addEventListener("change", (e) => {
+    $("#plan").addEventListener("change", (e) => {
       if (!e.target.matches(".check")) return;
       saved[e.target.dataset.id] = e.target.checked;
       localStorage.setItem("mne-tapes", JSON.stringify(saved));
@@ -1544,7 +1033,10 @@
     });
 
     document.querySelectorAll(".js-tape-play").forEach((btn) => {
-      btn.addEventListener("click", togglePlay);
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        togglePlay();
+      });
     });
     document.querySelectorAll("[data-tape]").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -1555,25 +1047,6 @@
       });
     });
 
-    $("#play-route").addEventListener("click", playRoute);
-    $("#fit-route").addEventListener("click", fitActiveDay);
-    $("#sat-toggle").addEventListener("click", () => {
-      const usingSat = map.hasLayer(sat);
-      if (usingSat) {
-        map.removeLayer(sat);
-        streets.addTo(map);
-        $("#sat-toggle").textContent = "Спутник";
-        $("#sat-toggle").classList.remove("is-on");
-        $("#map").classList.remove("is-sat");
-      } else {
-        map.removeLayer(streets);
-        sat.addTo(map);
-        $("#sat-toggle").textContent = "Карта";
-        $("#sat-toggle").classList.add("is-on");
-        $("#map").classList.add("is-sat");
-      }
-    });
-
     const recTime = $("#rec-time");
     const start = Date.now();
     setInterval(() => {
@@ -1582,19 +1055,6 @@
       const ss = String(s % 60).padStart(2, "0");
       recTime.textContent = `00:${mm}:${ss}`;
     }, 1000);
-
-    let tapeTick = 0;
-    window.addEventListener(
-      "scroll",
-      () => {
-        if (tapeTick) return;
-        tapeTick = requestAnimationFrame(() => {
-          tapeTick = 0;
-          updateTapeProgress();
-        });
-      },
-      { passive: true }
-    );
 
     const mixtape = $("#mixtape");
     if (mixtape && !isCompact()) {
@@ -1609,37 +1069,42 @@
       io.observe(mixtape);
     }
 
-    compactMq.addEventListener("change", () => {
-      syncCompact();
-      applyMapTouchMode();
-      initScrollSpy();
-    });
-    window.addEventListener("resize", () => {
-      syncCompact();
-      refreshMapSize();
-    });
-    window.visualViewport?.addEventListener("resize", refreshMapSize);
+    compactMq.addEventListener("change", syncCompact);
+    window.addEventListener("resize", syncCompact);
 
-    const road = $("#map-section");
-    if (road) {
-      const mapIo = new IntersectionObserver(
-        (entries) => {
-          if (entries[0].isIntersecting) refreshMapSize();
-        },
-        { threshold: 0.2 }
-      );
-      mapIo.observe(road);
+    if (location.hash) {
+      const id = location.hash.slice(1);
+      const el = document.getElementById(id);
+      if (el) requestAnimationFrame(() => el.scrollIntoView({ block: "center" }));
     }
   }
 
+  function initTheme() {
+    const root = document.documentElement;
+    const btn = $("#theme-btn");
+    if (!btn) return;
+
+    function paint(theme) {
+      root.dataset.theme = theme;
+      localStorage.setItem("mne-theme", theme);
+      const light = theme === "light";
+      btn.textContent = light ? "ночь" : "день";
+      btn.setAttribute("aria-label", light ? "Тёмная тема" : "Светлая тема");
+    }
+
+    paint(root.dataset.theme === "light" ? "light" : "dark");
+    btn.addEventListener("click", () => {
+      paint(root.dataset.theme === "dark" ? "light" : "dark");
+    });
+  }
+
   renderNav();
-  renderStory();
-  cacheStopEls();
+  renderPlan();
   renderStays();
   renderTape();
   FX.init();
   initCassette();
-  initMap();
+  FILM.init();
+  initTheme();
   bind();
-  initScrollSpy();
 })();

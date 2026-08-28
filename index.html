@@ -14,12 +14,11 @@
       href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Caveat:wght@400;600;700&family=Instrument+Serif:ital@0;1&family=Outfit:wght@300;400;500;600&family=Special+Elite&family=Unbounded:wght@300;500;700&display=swap"
       rel="stylesheet"
     />
-    <link
-      rel="stylesheet"
-      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-      crossorigin=""
-    />
+    <meta name="color-scheme" content="dark light" />
+    <script>
+      document.documentElement.dataset.theme =
+        localStorage.getItem("mne-theme") === "light" ? "light" : "dark";
+    </script>
     <link rel="stylesheet" href="css/styles.css" />
     <link
       rel="icon"
@@ -61,6 +60,9 @@
       <span class="now-play" id="now-play">▶ SIDE A</span>
       <a class="brand" href="#hero">МОНТЕНЕГРО</a>
       <nav class="days-nav" id="days-nav" aria-label="Дни поездки"></nav>
+      <button type="button" class="theme-btn" id="theme-btn" aria-label="Светлая тема">
+        день
+      </button>
     </header>
 
     <section class="tape-hero" id="hero">
@@ -176,22 +178,26 @@
           <figcaption>остров, который люди насыпали руками</figcaption>
         </figure>
       </div>
-      <a class="to-map" href="#overview">↓ карта и дни</a>
+      <a class="to-map" href="#overview">↓ дальше по плёнке</a>
     </section>
 
-    <section class="road" id="map-section">
-      <div class="atlas">
-        <div id="map" role="application" aria-label="Карта маршрута"></div>
-        <div class="map-corners" aria-hidden="true"></div>
-        <div class="map-now" id="map-now">весь маршрут · аэропорт → Дурмитор → аэропорт</div>
-        <div class="map-arrive" id="map-arrive"></div>
-        <div class="map-hud">
-          <button class="hud-btn" id="play-route" type="button">Проиграть сторону</button>
-          <button class="hud-btn" id="fit-route" type="button">Этот день</button>
-          <button class="hud-btn" id="sat-toggle" type="button">Спутник</button>
+    <section class="film" id="film">
+      <div class="stage" id="stage" aria-hidden="true">
+        <div class="stage-bg">
+          <img id="stage-a" alt="" />
+          <img id="stage-b" alt="" />
         </div>
+        <svg class="stage-trace" id="stage-trace" viewBox="0 0 240 320" preserveAspectRatio="xMidYMid slice"></svg>
+        <div class="stage-grade"></div>
+        <div class="stage-vignette"></div>
+        <aside class="board" id="board">
+          <p class="board-kicker">перемещение</p>
+          <svg id="board-svg" viewBox="0 0 240 320" role="img" aria-label="Маршрут поездки"></svg>
+          <p class="board-now" id="board-now">аэропорт → Дурмитор → аэропорт</p>
+        </aside>
+        <p class="stage-caption" id="stage-caption"></p>
       </div>
-      <div class="story" id="story"></div>
+      <div class="plan" id="plan"></div>
     </section>
     <div class="scroll-glow" id="scroll-glow" aria-hidden="true"></div>
 
@@ -235,7 +241,7 @@
       </p>
       <p class="photo-credit">Side B — когда-нибудь потом.</p>
       <p class="photo-credit">
-        карта — OpenStreetMap · собрано вручную, как микстейп для важного человека
+        собрано вручную, как микстейп для важного человека
       </p>
     </footer>
 
@@ -245,13 +251,9 @@
       loop
       preload="auto"
       playsinline
+      webkit-playsinline="true"
     ></audio>
 
-    <script
-      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-      crossorigin=""
-    ></script>
     <script src="js/trip.js"></script>
     <script src="js/app.js"></script>
   </body>

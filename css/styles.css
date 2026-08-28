@@ -1226,6 +1226,7 @@ body.is-traveling .car-emoji {
   background: var(--cream);
   padding: 52px 40px 88px 52px;
   border-left: 1px solid rgba(26, 20, 16, 0.08);
+  overflow: visible;
 }
 
 .day {
@@ -1233,8 +1234,12 @@ body.is-traveling .car-emoji {
   scroll-margin-top: 84px;
 }
 
+.stop-scene {
+  scroll-margin-top: calc(var(--top) + 12px);
+}
+
 .day-end {
-  height: clamp(88px, 28vh, 260px);
+  height: clamp(120px, 36vh, 320px);
   pointer-events: none;
 }
 
@@ -1398,19 +1403,205 @@ body.is-traveling .car-emoji {
 
 .stops {
   display: grid;
-  gap: 12px;
+  gap: 0;
+  overflow-anchor: none;
+}
+
+.day:not(.is-tour) .stops {
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.tour-start {
+  height: clamp(28px, 16vh, 120px);
+  margin: 4px 0 0;
+}
+
+.stop-scene {
+  min-height: 0;
+}
+
+.day.is-tour .stop-scene {
+  min-height: 132vh;
+  position: relative;
+  padding-top: 8px;
+}
+
+.day.is-tour .stop-scene.is-on {
+  z-index: 2;
+}
+
+.day-roster {
+  display: grid;
+  gap: 8px;
+  margin: 4px 0 8px;
+}
+
+.roster-item {
+  appearance: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  width: 100%;
+  background: var(--vanilla);
+  border: 1px solid rgba(26, 20, 16, 0.08);
+  padding: 10px 88px 10px 12px;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  cursor: pointer;
+  position: relative;
+  overflow: visible;
+  transition: transform 0.2s, box-shadow 0.2s, outline-color 0.2s;
+}
+
+.roster-item:not(.has-shot) {
+  padding-right: 14px;
+}
+
+.roster-item.is-on {
+  outline: 2px solid var(--rust);
+  box-shadow: -5px 0 0 var(--rust);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .roster-item:hover {
+    transform: translateX(3px);
+    box-shadow: var(--shadow);
+  }
+}
+
+.roster-n {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  background: var(--rust);
+  color: #fff;
+  font-family: var(--font-sign);
+  font-size: 0.95rem;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 2px var(--rust);
+  flex-shrink: 0;
+}
+
+.roster-text {
+  min-width: 0;
+}
+
+.roster-text b {
+  display: block;
+  font-size: 0.98rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.roster-text small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.shot {
+  background: #fff;
+  box-shadow: var(--shadow);
+  position: relative;
+  margin: 0;
+}
+
+.shot img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  filter: saturate(0.82) contrast(1.08) sepia(0.12);
+}
+
+.shot::before {
+  content: "";
+  position: absolute;
+  top: -7px;
+  left: 50%;
+  width: 38px;
+  height: 13px;
+  background: rgba(212, 162, 74, 0.5);
+  transform: translateX(-50%) rotate(-8deg);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.35) inset;
+  z-index: 1;
+}
+
+.shot--pin {
+  position: absolute;
+  right: -10px;
+  top: 50%;
+  width: 74px;
+  padding: 5px 5px 7px;
+  transform: translateY(-50%) rotate(7deg);
+  z-index: 2;
+}
+
+.roster-item:nth-child(even) .shot--pin {
+  transform: translateY(-50%) rotate(-6deg);
+  right: -6px;
+}
+
+.roster-item:hover .shot--pin {
+  z-index: 4;
+  transform: translateY(-58%) rotate(0deg) scale(1.06);
+}
+
+.shot--pin figcaption,
+.shot--pin caption {
+  display: none;
+}
+
+.shot--card {
+  position: absolute;
+  right: -14px;
+  top: 14px;
+  width: min(42%, 200px);
+  padding: 9px 9px 34px;
+  transform: rotate(6deg);
+  z-index: 3;
+}
+
+.stop:nth-child(even) .shot--card,
+.stop-scene:nth-child(even) .shot--card {
+  transform: rotate(-5deg);
+  right: -10px;
+}
+
+.shot--card figcaption {
+  font-family: var(--font-hand);
+  text-align: center;
+  font-size: 1.05rem;
+  line-height: 1.2;
+  color: var(--ink-soft);
+  margin-top: 6px;
+  padding: 0 2px;
 }
 
 .stop {
   background: var(--vanilla);
   border: 1px solid rgba(26, 20, 16, 0.08);
-  padding: 14px 16px 14px 14px;
+  padding: 16px 18px 16px 14px;
   display: grid;
   grid-template-columns: auto 1fr auto;
   gap: 12px;
   align-items: start;
   cursor: pointer;
-  transition: transform 0.2s, box-shadow 0.2s;
+  position: relative;
+  overflow: visible;
+  transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.35s, opacity 0.4s, outline-color 0.2s;
+}
+
+.stop.has-shot {
+  padding-right: min(46%, 228px);
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -1426,6 +1617,21 @@ body.is-traveling .car-emoji {
   transform: translateX(6px);
 }
 
+.day.is-tour .stop.is-on {
+  position: sticky;
+  top: calc(var(--top) + 16px);
+  z-index: 3;
+  opacity: 1;
+  visibility: visible;
+}
+
+.day.is-tour .stop:not(.is-on) {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(18px);
+}
+
 .check {
   width: 22px;
   height: 22px;
@@ -1435,15 +1641,15 @@ body.is-traveling .car-emoji {
 
 .stop h3 {
   margin: 0 0 4px;
-  font-size: 1.02rem;
+  font-size: 1.08rem;
   font-weight: 600;
 }
 
 .stop p {
   margin: 0;
   color: var(--ink-soft);
-  font-size: 0.9rem;
-  line-height: 1.5;
+  font-size: 0.95rem;
+  line-height: 1.55;
 }
 
 .kind {
@@ -1476,6 +1682,10 @@ body.is-traveling .car-emoji {
 
 .stop[data-kind="skip"] {
   opacity: 0.62;
+}
+
+.day.is-tour .stop[data-kind="skip"]:not(.is-on) {
+  opacity: 0;
 }
 
 .stop[data-kind="sleep"] {
@@ -2018,7 +2228,9 @@ body.is-traveling .grain {
   }
 
   .day,
-  .stop {
+  .stop,
+  .stop-scene,
+  .roster-item {
     scroll-margin-top: calc(var(--top) + var(--map-h) + 12px);
   }
 
@@ -2031,7 +2243,26 @@ body.is-traveling .grain {
   }
 
   .day-end {
-    height: clamp(64px, 22vh, 180px);
+    height: clamp(88px, 28vh, 220px);
+  }
+
+  .day.is-tour .stop-scene {
+    min-height: calc(100svh - var(--top) - var(--map-h) + 42vh);
+  }
+
+  .day.is-tour .stop.is-on {
+    top: calc(var(--top) + var(--map-h) + 10px);
+    max-height: calc(100svh - var(--top) - var(--map-h) - 16px);
+    overflow: auto;
+  }
+
+  .shot--pin {
+    width: 62px;
+    right: -6px;
+  }
+
+  .roster-item.has-shot {
+    padding-right: 72px;
   }
 
   .still img {
@@ -2081,6 +2312,27 @@ body.is-traveling .grain {
     grid-column: 2;
     text-align: left;
     white-space: normal;
+  }
+
+  .stop.has-shot {
+    padding-right: 14px;
+  }
+
+  .shot--card {
+    position: relative;
+    right: auto;
+    top: auto;
+    width: min(168px, 58%);
+    padding: 7px 7px 28px;
+    margin: 6px 4px 4px auto;
+    grid-column: 1 / -1;
+    transform: rotate(4deg);
+  }
+
+  .stop-scene:nth-child(even) .shot--card {
+    margin-left: 4px;
+    margin-right: auto;
+    transform: rotate(-4deg);
   }
 
   .wrap {
@@ -2144,5 +2396,20 @@ body.is-traveling .grain {
   .polaroid-flash,
   .edge-sparkles {
     display: none;
+  }
+
+  .day.is-tour .stop-scene {
+    min-height: 0;
+  }
+
+  .day.is-tour .stop.is-on {
+    position: static;
+  }
+
+  .day.is-tour .stop:not(.is-on) {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: none;
   }
 }

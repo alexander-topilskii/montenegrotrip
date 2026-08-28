@@ -25,6 +25,17 @@
 
   const saved = JSON.parse(localStorage.getItem("mne-tapes") || "{}");
 
+  function photoUrl(key) {
+    return (key && TRIP.photos[key]) || "";
+  }
+
+  function renderShot(stop, variant) {
+    const src = photoUrl(stop.photo);
+    if (!src) return "";
+    const cap = variant === "card" ? `<figcaption>${stop.name}</figcaption>` : "";
+    return `<figure class="shot shot--${variant}" aria-hidden="true"><img src="${src}" alt="" loading="lazy" decoding="async">${cap}</figure>`;
+  }
+
   function renderStory() {
     const ov = TRIP.overview;
     const overviewHtml = `
@@ -65,23 +76,42 @@
       TRIP.days
         .map((day) => {
         const photo = TRIP.photos[day.photo];
+        const roster = day.stops
+          .map((stop, i) => {
+            const shot = renderShot(stop, "pin");
+            const n = String(i + 1).padStart(2, "0");
+            return `
+            <button type="button" class="roster-item${shot ? " has-shot" : ""}" data-jump-stop="${stop.id}">
+              <span class="roster-n">${n}</span>
+              <span class="roster-text">
+                <b>${stop.name}</b>
+                <small>${stop.time} · ${kinds[stop.kind] || stop.kind}</small>
+              </span>
+              ${shot}
+            </button>`;
+          })
+          .join("");
         const stops = day.stops
           .map((stop) => {
             const checked = saved[stop.id] ? "checked" : "";
+            const shot = renderShot(stop, "card");
             return `
-            <article class="stop" data-kind="${stop.kind}" data-stop="${stop.id}" data-day="${day.id}" data-lat="${stop.lat}" data-lng="${stop.lng}">
-              <input class="check" type="checkbox" data-id="${stop.id}" ${checked} aria-label="Отметить: ${stop.name}">
-              <div>
-                <h3>${stop.name}</h3>
-                <p>${stop.note}</p>
-                <a class="maps-link" href="${stop.maps}" target="_blank" rel="noopener">открыть в картах</a>
-              </div>
-              <div class="kind">${stop.time}<small>${stop.dur} · ${kinds[stop.kind] || stop.kind}</small></div>
-            </article>`;
+            <div class="stop-scene" id="scene-${stop.id}" data-stop-scene="${stop.id}">
+              <article class="stop${shot ? " has-shot" : ""}" data-kind="${stop.kind}" data-stop="${stop.id}" data-day="${day.id}" data-lat="${stop.lat}" data-lng="${stop.lng}">
+                <input class="check" type="checkbox" data-id="${stop.id}" ${checked} aria-label="Отметить: ${stop.name}">
+                <div class="stop__body">
+                  <h3>${stop.name}</h3>
+                  <p>${stop.note}</p>
+                  <a class="maps-link" href="${stop.maps}" target="_blank" rel="noopener">открыть в картах</a>
+                </div>
+                <div class="kind">${stop.time}<small>${stop.dur} · ${kinds[stop.kind] || stop.kind}</small></div>
+                ${shot}
+              </article>
+            </div>`;
           })
           .join("");
         return `
-        <section class="day" id="${day.id}">
+        <section class="day" id="${day.id}" data-stage="intro">
           <div class="day-head">
             <div class="hwy" aria-hidden="true">${day.hwy}</div>
             <div>
@@ -101,6 +131,8 @@
           </figure>
           <blockquote class="liner">${day.quote}</blockquote>
           <p class="summary">${day.summary}</p>
+          <div class="day-roster">${roster}</div>
+          <div class="tour-start" aria-hidden="true"></div>
           <div class="stops">${stops}</div>
           <div class="day-end" aria-hidden="true"></div>
         </section>`;
@@ -861,11 +893,35 @@
         if (day) now.textContent = `${day.track} · весь маршрут · ${day.title}`;
       }
     }
-    if (id === "overview") {
-      document.querySelectorAll(".stop").forEach((el) => el.classList.remove("is-on"));
-    }
     applyMarkerFocus(id, stopId);
     requestAnimationFrame(() => applyMarkerFocus(id, stopId));
+  }
+
+  function syncStoryFocus(dayId, stopId, stage) {
+    const ids = TRIP.days.map((d) => d.id);
+    const curIdx = ids.indexOf(dayId);
+    document.querySelectorAll(".day:not(.overview-day)").forEach((el) => {
+      const idx = ids.indexOf(el.id);
+      const current = el.id === dayId;
+      if (current) {
+        el.classList.toggle("is-tour", stage === "stops" || stage === "outro");
+        el.dataset.stage = stage;
+        return;
+      }
+      if (!dayId || (curIdx >= 0 && idx > curIdx)) {
+        el.classList.remove("is-tour");
+        el.dataset.stage = "intro";
+      }
+    });
+    document.querySelectorAll(".stop").forEach((el) => {
+      el.classList.toggle("is-on", !!(stopId && el.dataset.stop === stopId));
+    });
+    document.querySelectorAll(".stop-scene").forEach((el) => {
+      el.classList.toggle("is-on", !!(stopId && el.dataset.stopScene === stopId));
+    });
+    document.querySelectorAll(".roster-item").forEach((el) => {
+      el.classList.toggle("is-on", !!(stopId && el.dataset.jumpStop === stopId));
+    });
   }
 
   function crossfadeToDay(nextId, opts = {}) {
@@ -904,6 +960,7 @@
 
     setDayChrome(nextId);
     dayStage = stage;
+    syncStoryFocus(nextId, null, stage === "outro" ? "outro" : stage === "stops" ? "stops" : "intro");
     if (toPts[0]) carMarker.setLatLng(toPts[0]);
     loadRoute(to);
 
@@ -945,6 +1002,7 @@
     activeStop = null;
     resetFollowCam(null);
     setDayChrome(id);
+    syncStoryFocus(id, null, "intro");
     const day = dayOf(id);
     if (!day) return;
     const dense = denseRoute(day);
@@ -965,12 +1023,14 @@
     dayStage = "outro";
     dayFollow = false;
     followZooming = false;
+    const keepStop = activeStop;
     activeStop = null;
     resetFollowCam(null);
     const day = dayOf(id);
     if (!day) return;
     paintDayLines(day, true);
     setDayChrome(id, null, `${day.track} · весь день · ${day.title}`);
+    syncStoryFocus(id, keepStop, "outro");
     fitSubject(day, isCompact() ? 0.7 : 0.95);
   }
 
@@ -1181,7 +1241,7 @@
     driveToken += 1;
     resetFollowCam(null);
     setDayChrome("overview");
-    document.querySelectorAll(".stop").forEach((el) => el.classList.remove("is-on"));
+    syncStoryFocus(null, null, "intro");
     paintOverviewLines(fly);
     loadRoute(TRIP.overview);
   }
@@ -1229,9 +1289,7 @@
     cancelRouteFade();
     dayStage = "follow";
 
-    document.querySelectorAll(".stop").forEach((el) => {
-      el.classList.toggle("is-on", el.dataset.stop === id);
-    });
+    syncStoryFocus(day.id, id, "stops");
 
     const entering = day.id !== activeDay;
     if (entering) setActiveDay(day.id, { fly: false, force: true, follow: false });
@@ -1480,14 +1538,15 @@
   }
 
   function dayScrollPhase(dayEl, band) {
-    const stops = dayEl.querySelectorAll(".stop");
-    if (!stops.length) return "intro";
-    const first = stops[0].getBoundingClientRect();
-    const last = stops[stops.length - 1].getBoundingClientRect();
-    const firstMid = first.top + first.height * 0.35;
-    const lastMid = last.top + last.height * 0.35;
-    if (firstMid > band + 28) return "intro";
-    if (lastMid < band - 10) return "outro";
+    const start = dayEl.querySelector(".tour-start");
+    const end = dayEl.querySelector(".day-end");
+    if (!start) return "intro";
+    const startTop = start.getBoundingClientRect().top;
+    if (startTop > band + 28) return "intro";
+    if (end) {
+      const endTop = end.getBoundingClientRect().top;
+      if (endTop < band - 8) return "outro";
+    }
     return "stops";
   }
 
@@ -1520,19 +1579,23 @@
     if (phase === "intro") return { type: "day", id: host.id, phase: "intro" };
     if (phase === "outro") return { type: "day", id: host.id, phase: "outro" };
 
-    let bestStop = null;
-    let bestStopD = Infinity;
-    host.querySelectorAll(".stop").forEach((el) => {
+    let bestScene = null;
+    let bestSceneD = Infinity;
+    host.querySelectorAll(".stop-scene").forEach((el) => {
       const r = el.getBoundingClientRect();
-      if (r.bottom < topCut || r.top > window.innerHeight - 40) return;
-      const mid = r.top + r.height * 0.35;
-      const d = Math.abs(mid - band);
-      if (d < bestStopD) {
-        bestStopD = d;
-        bestStop = el;
+      if (r.height < 24) return;
+      if (r.top <= band && r.bottom >= band) {
+        bestScene = el;
+        bestSceneD = 0;
+        return;
+      }
+      const d = r.bottom < band ? band - r.bottom : r.top - band;
+      if (d < bestSceneD) {
+        bestSceneD = d;
+        bestScene = el;
       }
     });
-    if (bestStop) return { type: "stop", id: bestStop.dataset.stop };
+    if (bestScene) return { type: "stop", id: bestScene.dataset.stopScene };
     return { type: "day", id: host.id, phase: "stops" };
   }
 
@@ -1773,6 +1836,10 @@
       if (target.phase === "outro") enterDayOutro(target.id);
       else if (target.phase === "stops") {
         if (target.id !== activeDay) enterDayIntro(target.id);
+        const day = dayOf(target.id);
+        const first = day?.stops?.[0];
+        if (first && !activeStop) highlightStop(first.id, { fromScroll: true, fly: false });
+        else if (day) syncStoryFocus(target.id, activeStop, "stops");
       } else enterDayIntro(target.id);
       return;
     }
@@ -1824,6 +1891,20 @@
         });
         applyMarkerFocus("overview", id);
         ovMarkers.find((m) => m.ovId === id)?.openPopup();
+        return;
+      }
+      const jump = e.target.closest("[data-jump-stop]");
+      if (jump) {
+        const id = jump.dataset.jumpStop;
+        highlightStop(id, { fly: true, fromScroll: false });
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            document.getElementById("scene-" + id)?.scrollIntoView({
+              behavior: reduced() ? "auto" : "smooth",
+              block: "start",
+            });
+          });
+        });
         return;
       }
       const stop = e.target.closest(".stop");

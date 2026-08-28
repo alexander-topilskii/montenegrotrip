@@ -1648,8 +1648,8 @@ body.is-traveling .grain {
 @media (max-width: 980px) {
   :root {
     --top: calc(52px + var(--safe-top));
-    --map-h: clamp(210px, 38vh, 300px);
-    --map-h: clamp(210px, 38svh, 300px);
+    --map-h: clamp(220px, 40vh, 340px);
+    --map-h: clamp(220px, 40svh, 340px);
   }
 
   html {
@@ -1713,7 +1713,10 @@ body.is-traveling .grain {
     margin-left: auto;
     overflow-x: auto;
     flex-wrap: nowrap;
-    max-width: 46vw;
+    max-width: none;
+    flex: 1;
+    justify-content: flex-end;
+    min-width: 0;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
   }
@@ -1901,6 +1904,12 @@ body.is-traveling .grain {
 
   .brand {
     max-width: 28vw;
+  }
+
+  @media (max-width: 420px) {
+    .brand {
+      display: none;
+    }
   }
 
   .day-head {

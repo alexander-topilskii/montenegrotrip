@@ -42,6 +42,22 @@
 
     <header class="topbar">
       <div class="rec"><b></b> REC <span id="rec-time">00:00:00</span></div>
+      <div class="bar-deck" id="bar-deck" aria-label="Магнитофон">
+        <div class="bar-deck__window" aria-hidden="true">
+          <span class="bar-deck__reel bar-deck__reel--l"></span>
+          <span class="bar-deck__tape"></span>
+          <span class="bar-deck__reel bar-deck__reel--r"></span>
+        </div>
+        <div class="bar-deck__buttons">
+          <button type="button" class="tape-btn" data-tape="rew" aria-label="Предыдущий день">◀◀</button>
+          <button type="button" class="tape-btn tape-btn--play js-tape-play" aria-label="Play">▶</button>
+          <button type="button" class="tape-btn" data-tape="ff" aria-label="Следующий день">▶▶</button>
+          <button type="button" class="tape-btn" data-tape="stop" aria-label="Стоп">■</button>
+        </div>
+        <div class="bar-deck__vu" aria-hidden="true">
+          <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+        </div>
+      </div>
       <span class="now-play" id="now-play">▶ SIDE A</span>
       <a class="brand" href="#hero">МОНТЕНЕГРО</a>
       <nav class="days-nav" id="days-nav" aria-label="Дни поездки"></nav>
@@ -124,10 +140,10 @@
             </div>
             <div class="tape-deck__panel">
               <div class="tape-deck__buttons">
-                <span class="tape-btn">◀◀</span>
-                <span class="tape-btn tape-btn--play" id="btn-play">▶</span>
-                <span class="tape-btn">▶▶</span>
-                <span class="tape-btn">■</span>
+                <button type="button" class="tape-btn" data-tape="rew" aria-label="Предыдущий день">◀◀</button>
+                <button type="button" class="tape-btn tape-btn--play js-tape-play" id="btn-play" aria-label="Play">▶</button>
+                <button type="button" class="tape-btn" data-tape="ff" aria-label="Следующий день">▶▶</button>
+                <button type="button" class="tape-btn" data-tape="stop" aria-label="Стоп">■</button>
               </div>
               <div class="tape-vu" id="vu">
                 <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
@@ -147,7 +163,7 @@
 
     <section class="epigraph" id="top">
       <p class="epigraph__text">
-        Нажми PLAY.<br />Дальше — только дорога и то, что мы успеем запомнить.
+        Дальше — только дорога и то, что мы успеем запомнить.
       </p>
       <p class="epigraph__sign">— шесть дней, одна машина, полный багажник сентября</p>
       <div class="polaroids" aria-hidden="true">
@@ -177,6 +193,7 @@
       </div>
       <div class="story" id="story"></div>
     </section>
+    <div class="scroll-glow" id="scroll-glow" aria-hidden="true"></div>
 
     <section class="panel alt" id="stays">
       <div class="wrap">
@@ -221,6 +238,14 @@
         карта — OpenStreetMap · собрано вручную, как микстейп для важного человека
       </p>
     </footer>
+
+    <audio
+      id="tape-audio"
+      src="audio/rearview-horizon.mp3"
+      loop
+      preload="auto"
+      playsinline
+    ></audio>
 
     <script
       src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"

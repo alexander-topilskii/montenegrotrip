@@ -76,65 +76,48 @@
       TRIP.days
         .map((day) => {
         const photo = TRIP.photos[day.photo];
-        const roster = day.stops
-          .map((stop, i) => {
-            const shot = renderShot(stop, "pin");
-            const n = String(i + 1).padStart(2, "0");
-            return `
-            <button type="button" class="roster-item${shot ? " has-shot" : ""}" data-jump-stop="${stop.id}">
-              <span class="roster-n">${n}</span>
-              <span class="roster-text">
-                <b>${stop.name}</b>
-                <small>${stop.time} · ${kinds[stop.kind] || stop.kind}</small>
-              </span>
-              ${shot}
-            </button>`;
-          })
-          .join("");
         const stops = day.stops
-          .map((stop) => {
+          .map((stop, i) => {
             const checked = saved[stop.id] ? "checked" : "";
             const shot = renderShot(stop, "card");
+            const n = String(i + 1).padStart(2, "0");
             return `
-            <div class="stop-scene" id="scene-${stop.id}" data-stop-scene="${stop.id}">
-              <article class="stop${shot ? " has-shot" : ""}" data-kind="${stop.kind}" data-stop="${stop.id}" data-day="${day.id}" data-lat="${stop.lat}" data-lng="${stop.lng}">
-                <input class="check" type="checkbox" data-id="${stop.id}" ${checked} aria-label="Отметить: ${stop.name}">
-                <div class="stop__body">
-                  <h3>${stop.name}</h3>
-                  <p>${stop.note}</p>
-                  <a class="maps-link" href="${stop.maps}" target="_blank" rel="noopener">открыть в картах</a>
-                </div>
-                <div class="kind">${stop.time}<small>${stop.dur} · ${kinds[stop.kind] || stop.kind}</small></div>
-                ${shot}
-              </article>
-            </div>`;
+            <article class="stop${shot ? " has-shot" : ""}" id="stop-${stop.id}" data-kind="${stop.kind}" data-stop="${stop.id}" data-day="${day.id}" data-lat="${stop.lat}" data-lng="${stop.lng}">
+              <input class="check" type="checkbox" data-id="${stop.id}" ${checked} aria-label="Отметить: ${stop.name}">
+              <div class="stop__body">
+                <h3><span class="stop-n">${n}</span>${stop.name}</h3>
+                <p>${stop.note}</p>
+                <a class="maps-link" href="${stop.maps}" target="_blank" rel="noopener">открыть в картах</a>
+              </div>
+              <div class="kind">${stop.time}<small>${stop.dur} · ${kinds[stop.kind] || stop.kind}</small></div>
+              ${shot}
+            </article>`;
           })
           .join("");
         return `
-        <section class="day" id="${day.id}" data-stage="intro">
-          <div class="day-head">
-            <div class="hwy" aria-hidden="true">${day.hwy}</div>
-            <div>
-              <p class="slug">${day.slug}</p>
-              <h2>${day.title}</h2>
-              <div class="meta">
-                <span class="chip">${day.track}</span>
-                <span class="chip">${day.date}</span>
-                <span class="chip">${day.weekday}</span>
-                <span class="chip">${day.drive}</span>
+        <section class="day" id="${day.id}">
+          <div class="day-lead">
+            <div class="day-head">
+              <div class="hwy" aria-hidden="true">${day.hwy}</div>
+              <div>
+                <p class="slug">${day.slug}</p>
+                <h2>${day.title}</h2>
+                <div class="meta">
+                  <span class="chip">${day.track}</span>
+                  <span class="chip">${day.date}</span>
+                  <span class="chip">${day.weekday}</span>
+                  <span class="chip">${day.drive}</span>
+                </div>
               </div>
             </div>
+            <figure class="still">
+              <img src="${photo}" alt="${day.caption}" loading="lazy">
+              <figcaption>${day.caption}</figcaption>
+            </figure>
+            <blockquote class="liner">${day.quote}</blockquote>
+            <p class="summary">${day.summary}</p>
           </div>
-          <figure class="still">
-            <img src="${photo}" alt="${day.caption}" loading="lazy">
-            <figcaption>${day.caption}</figcaption>
-          </figure>
-          <blockquote class="liner">${day.quote}</blockquote>
-          <p class="summary">${day.summary}</p>
-          <div class="day-roster">${roster}</div>
-          <div class="tour-start" aria-hidden="true"></div>
           <div class="stops">${stops}</div>
-          <div class="day-end" aria-hidden="true"></div>
         </section>`;
         })
         .join("");
@@ -214,28 +197,36 @@
       }));
     }
 
+    function kickTick() {
+      if (raf || reduced() || !ctx) return;
+      raf = requestAnimationFrame(tick);
+    }
+
     function tick(t) {
       if (!ctx) return;
-      ctx.clearRect(0, 0, w, h);
       const live = document.body.classList.contains("tape-on") || travel > 0.05;
-      if (live) {
-        const boost = 1 + travel * 1.6;
-        motes.forEach((m) => {
-          m.y -= m.s * 0.00028 * boost;
-          m.x += Math.sin(t / 900 + m.drift) * 0.00007;
-          if (m.y < -0.03) m.y = 1.03;
-          if (m.x < 0) m.x += 1;
-          if (m.x > 1) m.x -= 1;
-          let px = m.x;
-          if (travel > 0.15) {
-            px = m.edge ? 0.04 + m.x * 0.1 : 0.86 + m.x * 0.1;
-          }
-          ctx.beginPath();
-          ctx.fillStyle = `rgba(255, 236, 210, ${m.a * (0.45 + travel * 0.7)})`;
-          ctx.arc(px * w, m.y * h, m.r * dpr * boost, 0, Math.PI * 2);
-          ctx.fill();
-        });
+      if (!live) {
+        ctx.clearRect(0, 0, w, h);
+        raf = 0;
+        return;
       }
+      ctx.clearRect(0, 0, w, h);
+      const boost = 1 + travel * 1.6;
+      motes.forEach((m) => {
+        m.y -= m.s * 0.00028 * boost;
+        m.x += Math.sin(t / 900 + m.drift) * 0.00007;
+        if (m.y < -0.03) m.y = 1.03;
+        if (m.x < 0) m.x += 1;
+        if (m.x > 1) m.x -= 1;
+        let px = m.x;
+        if (travel > 0.15) {
+          px = m.edge ? 0.04 + m.x * 0.1 : 0.86 + m.x * 0.1;
+        }
+        ctx.beginPath();
+        ctx.fillStyle = `rgba(255, 236, 210, ${m.a * (0.45 + travel * 0.7)})`;
+        ctx.arc(px * w, m.y * h, m.r * dpr * boost, 0, Math.PI * 2);
+        ctx.fill();
+      });
       raf = requestAnimationFrame(tick);
     }
 
@@ -285,6 +276,7 @@
     function travelOn() {
       travel = 1;
       document.body.classList.add("is-traveling");
+      kickTick();
       if (reduced()) return;
       window.clearInterval(sparkIv);
       sparkIv = window.setInterval(() => {
@@ -353,6 +345,7 @@
 
     function startAmbient() {
       document.body.classList.add("tape-on");
+      kickTick();
       if (reduced() || ambientIv) return;
       ambientIv = window.setInterval(() => {
         if (!document.body.classList.contains("tape-on")) return;
@@ -368,7 +361,6 @@
       initMotes();
       resize();
       window.addEventListener("resize", resize);
-      if (!reduced()) raf = requestAnimationFrame(tick);
     }
 
     return { init, spawn, rainNotes, travelOn, travelOff, flash, caption, clack, startAmbient };
@@ -389,21 +381,16 @@
   const routes = {};
   const ovMarkers = [];
   let dayFollow = false;
-  let followZooming = false;
-  let holdFollowY = null;
-  let ignoreScrollDrive = 0;
   let followCam = null;
   let carFlip = 1;
   let carFlipHold = 0;
-  let queuedScrollTarget = null;
-  let glowStr = 0;
-  let glowHold = 0;
-  let glowRaf = 0;
-  let dayStage = null;
-  let fading = false;
-  let fadeToken = 0;
-  let fadeOutgoing = [];
   let tapeFollowDrive = false;
+  const stopEls = {};
+  let activeStopEl = null;
+  let spy = null;
+  let spyRatios = new Map();
+  let spyTick = 0;
+  let fitLock = 0;
   let userPaused = false;
   let dockedDeck = false;
 
@@ -641,12 +628,7 @@
     try {
       routes[id] = simplifyPts(await fetchOsrm(wps));
       if (map) map.getContainer().dataset.osrm = id;
-      if (activeDay === id) {
-        if (fading) {
-          if (ghostLine) ghostLine.setLatLngs(routes[id]);
-          if (activeLine) activeLine.setLatLngs(routes[id]);
-        } else paintCurrentLines();
-      }
+      if (activeDay === id) paintCurrentLines();
     } catch (_) {
       routes[id] = fallbackRoute(wps);
     }
@@ -816,7 +798,6 @@
 
   function paintOverviewLines(fit) {
     const dense = denseRoute(TRIP.overview);
-    if (!fading) clearFadeLayers();
     if (ghostLine) map.removeLayer(ghostLine);
     if (activeLine) map.removeLayer(activeLine);
     ghostLine = L.polyline(dense, lineStyle(TRIP.overview.color, true)).addTo(map);
@@ -831,7 +812,6 @@
 
   function paintDayLines(day, full = true) {
     const dense = denseRoute(day);
-    if (!fading) clearFadeLayers();
     if (ghostLine) map.removeLayer(ghostLine);
     if (activeLine) map.removeLayer(activeLine);
     ghostLine = L.polyline(dense, lineStyle(day.color, true)).addTo(map);
@@ -842,11 +822,6 @@
     );
   }
 
-  function subjectOf(id) {
-    if (id === "overview") return TRIP.overview;
-    return dayOf(id);
-  }
-
   function routePad(sub) {
     if (sub && sub.id === "overview") return isCompact() ? 0.22 : 0.18;
     return isCompact() ? 0.42 : 0.28;
@@ -855,30 +830,15 @@
   function fitSubject(sub, duration) {
     const pts = denseRoute(sub);
     if (!pts.length || !map) return;
-    const dur = duration ?? (isCompact() ? 0.75 : 1);
+    const now = Date.now();
+    if (now < fitLock) return;
+    fitLock = now + 520;
+    const dur = duration ?? (isCompact() ? 0.6 : 0.75);
     if (reduced()) {
       map.fitBounds(L.latLngBounds(pts).pad(routePad(sub)));
       return;
     }
     map.flyToBounds(L.latLngBounds(pts).pad(routePad(sub)), { duration: dur });
-  }
-
-  function setPolyOpacity(line, ghost, t) {
-    if (!line) return;
-    line.setStyle({ opacity: (ghost ? 0.28 : 0.95) * t });
-  }
-
-  function clearFadeLayers() {
-    fadeOutgoing.forEach((l) => {
-      if (l && map && map.hasLayer(l)) map.removeLayer(l);
-    });
-    fadeOutgoing = [];
-  }
-
-  function cancelRouteFade() {
-    fadeToken += 1;
-    fading = false;
-    clearFadeLayers();
   }
 
   function setDayChrome(id, stopId = null, nowText = null) {
@@ -894,241 +854,19 @@
       }
     }
     applyMarkerFocus(id, stopId);
-    requestAnimationFrame(() => applyMarkerFocus(id, stopId));
   }
 
-  function syncStoryFocus(dayId, stopId, stage) {
-    const ids = TRIP.days.map((d) => d.id);
-    const curIdx = ids.indexOf(dayId);
-    document.querySelectorAll(".day:not(.overview-day)").forEach((el) => {
-      const idx = ids.indexOf(el.id);
-      const current = el.id === dayId;
-      if (current) {
-        el.classList.toggle("is-tour", stage === "stops" || stage === "outro");
-        el.dataset.stage = stage;
-        return;
-      }
-      if (!dayId || (curIdx >= 0 && idx > curIdx)) {
-        el.classList.remove("is-tour");
-        el.dataset.stage = "intro";
-      }
-    });
-    document.querySelectorAll(".stop").forEach((el) => {
-      el.classList.toggle("is-on", !!(stopId && el.dataset.stop === stopId));
-    });
-    document.querySelectorAll(".stop-scene").forEach((el) => {
-      el.classList.toggle("is-on", !!(stopId && el.dataset.stopScene === stopId));
-    });
-    document.querySelectorAll(".roster-item").forEach((el) => {
-      el.classList.toggle("is-on", !!(stopId && el.dataset.jumpStop === stopId));
-    });
-  }
-
-  function crossfadeToDay(nextId, opts = {}) {
-    const { stage = "intro" } = opts;
-    const from = subjectOf(activeDay);
-    const to = subjectOf(nextId);
-    if (!to) return;
-    if (!from || from.id === to.id || reduced() || !map) {
-      cancelRouteFade();
-      if (nextId === "overview") showOverview({ fly: true });
-      else setActiveDay(nextId, { fly: true, force: true });
-      dayStage = stage;
-      dayFollow = false;
-      return;
+  function markStop(id) {
+    if (activeStopEl) activeStopEl.classList.remove("is-on");
+    activeStopEl = id ? stopEls[id] || document.getElementById("stop-" + id) : null;
+    if (activeStopEl) {
+      activeStopEl.classList.add("is-on");
+      stopEls[id] = activeStopEl;
     }
-
-    fadeToken += 1;
-    const token = fadeToken;
-    fading = true;
-    dayFollow = false;
-    followZooming = false;
-    traveling = false;
-    driveToken += 1;
-    resetFollowCam(null);
-    activeStop = null;
-    clearFadeLayers();
-
-    const toPts = denseRoute(to);
-    const oldGhost = ghostLine;
-    const oldActive = activeLine;
-    fadeOutgoing = [oldGhost, oldActive].filter(Boolean);
-    ghostLine = L.polyline(toPts, lineStyle(to.color, true)).addTo(map);
-    activeLine = L.polyline(toPts, lineStyle(to.color, false)).addTo(map);
-    setPolyOpacity(ghostLine, true, 0);
-    setPolyOpacity(activeLine, false, 0);
-
-    setDayChrome(nextId);
-    dayStage = stage;
-    syncStoryFocus(nextId, null, stage === "outro" ? "outro" : stage === "stops" ? "stops" : "intro");
-    if (toPts[0]) carMarker.setLatLng(toPts[0]);
-    loadRoute(to);
-
-    ignoreScrollDrive = Date.now() + (isCompact() ? 750 : 1000);
-    fitSubject(to, isCompact() ? 0.8 : 1.05);
-
-    const dur = isCompact() ? 720 : 1000;
-    const t0 = performance.now();
-    function tick(now) {
-      if (token !== fadeToken) return;
-      const t = Math.min(1, (now - t0) / dur);
-      const e = smoothstep(t);
-      setPolyOpacity(oldGhost, true, 1 - e);
-      setPolyOpacity(oldActive, false, 1 - e);
-      setPolyOpacity(ghostLine, true, e);
-      setPolyOpacity(activeLine, false, e);
-      if (t < 1) requestAnimationFrame(tick);
-      else {
-        fading = false;
-        clearFadeLayers();
-      }
-    }
-    requestAnimationFrame(tick);
-  }
-
-  function enterDayIntro(id) {
-    if (fading && activeDay === id) return;
-    if (id === activeDay && dayStage === "intro" && !dayFollow) return;
-
-    if (id !== activeDay && activeDay) {
-      crossfadeToDay(id, { stage: "intro" });
-      return;
-    }
-
-    cancelRouteFade();
-    dayStage = "intro";
-    dayFollow = false;
-    followZooming = false;
-    activeStop = null;
-    resetFollowCam(null);
-    setDayChrome(id);
-    syncStoryFocus(id, null, "intro");
-    const day = dayOf(id);
-    if (!day) return;
-    const dense = denseRoute(day);
-    carMarker.setLatLng(dense[0]);
-    paintDayLines(day, true);
-    loadRoute(day);
-    ignoreScrollDrive = Date.now() + (isCompact() ? 700 : 900);
-    fitSubject(day);
-  }
-
-  function enterDayOutro(id) {
-    if (id !== activeDay) {
-      enterDayIntro(id);
-      return;
-    }
-    if (dayStage === "outro" && !dayFollow && !fading) return;
-    cancelRouteFade();
-    dayStage = "outro";
-    dayFollow = false;
-    followZooming = false;
-    const keepStop = activeStop;
-    activeStop = null;
-    resetFollowCam(null);
-    const day = dayOf(id);
-    if (!day) return;
-    paintDayLines(day, true);
-    setDayChrome(id, null, `${day.track} · весь день · ${day.title}`);
-    syncStoryFocus(id, keepStop, "outro");
-    fitSubject(day, isCompact() ? 0.7 : 0.95);
   }
 
   function currentSubject() {
     return isOverview() ? TRIP.overview : dayOf(activeDay);
-  }
-
-  function driveBusy() {
-    return traveling || followZooming;
-  }
-
-  function pageRoot() {
-    return document.scrollingElement || document.documentElement;
-  }
-
-  function pulseScrollGlow(delta) {
-    const el = $("#scroll-glow");
-    if (!el) return;
-    const mag = Math.min(1, 0.45 + Math.abs(delta || 40) / 160);
-    glowStr = Math.min(1, Math.max(glowStr * 0.4, mag));
-    el.style.opacity = glowStr.toFixed(3);
-    el.classList.add("is-on");
-    glowHold = performance.now() + 380;
-    if (glowRaf) return;
-    const tick = (now) => {
-      if (now < glowHold) {
-        glowRaf = requestAnimationFrame(tick);
-        return;
-      }
-      glowStr *= 0.88;
-      if (glowStr < 0.04) {
-        glowStr = 0;
-        glowRaf = 0;
-        el.classList.remove("is-on");
-        el.style.opacity = "0";
-        return;
-      }
-      el.style.opacity = glowStr.toFixed(3);
-      glowRaf = requestAnimationFrame(tick);
-    };
-    glowRaf = requestAnimationFrame(tick);
-  }
-
-  function nextDayEl() {
-    if (isOverview()) return document.querySelector(".day:not(.overview-day)");
-    const el = document.getElementById(activeDay);
-    if (!el) return null;
-    const next = el.nextElementSibling;
-    return next && next.classList.contains("day") ? next : null;
-  }
-
-  function nextDayLimitY() {
-    const next = nextDayEl();
-    if (!next) return null;
-    const atlas = $(".atlas");
-    const atlasBottom = atlas ? atlas.getBoundingClientRect().bottom : 0;
-    const band = isCompact()
-      ? Math.min(Math.max(atlasBottom + 36, window.innerHeight * 0.52), window.innerHeight * 0.72)
-      : window.innerHeight * 0.4;
-    const nextTop = next.getBoundingClientRect().top + window.scrollY;
-    return Math.max(0, nextTop - band + 8);
-  }
-
-  function clampScrollToDay() {
-    const limit = nextDayLimitY();
-    if (limit == null) return false;
-    const root = pageRoot();
-    if (root.scrollTop > limit + 1) {
-      root.scrollTop = limit;
-      return true;
-    }
-    return false;
-  }
-
-  function targetIsCurrentDay(target) {
-    if (!target) return false;
-    if (target.type === "overview") return isOverview();
-    if (target.type === "day") return target.id === activeDay;
-    if (target.type === "stop") {
-      const found = stopOf(target.id);
-      return !!(found && found.day.id === activeDay);
-    }
-    return false;
-  }
-
-  function applyScrollDelta(deltaY, deltaX = 0) {
-    const root = pageRoot();
-    let dy = deltaY;
-    if (driveBusy() && dy > 0) {
-      const limit = nextDayLimitY();
-      if (limit != null) {
-        const room = Math.max(0, limit - root.scrollTop);
-        if (dy > room) dy = room;
-      }
-    }
-    root.scrollTop += dy;
-    root.scrollLeft += deltaX;
-    return dy !== deltaY;
   }
 
   function finishTravel(onDone) {
@@ -1137,11 +875,10 @@
     FX.travelOff();
     syncPlayButtons();
     onDone?.();
-    if (!driveBusy()) flushQueuedScroll();
   }
 
   function driveAlong(pts, opts = {}) {
-    const { onDone, pan = true, notes = false, zoomAfter = null } = opts;
+    const { onDone, pan = false, notes = false, zoomAfter = null, scenic = false } = opts;
     driveToken += 1;
     const token = driveToken;
     if (driveRaf) cancelAnimationFrame(driveRaf);
@@ -1151,24 +888,29 @@
         const sub = currentSubject();
         if (sub) updateProgressLine(sub, pts[0]);
       }
-      finishTravel(onDone);
+      if (scenic) finishTravel(onDone);
+      else onDone?.();
       return;
     }
-    traveling = true;
-    FX.travelOn();
+    if (scenic) {
+      traveling = true;
+      FX.travelOn();
+      syncPlayButtons();
+    }
     if (notes) FX.rainNotes(Math.min(3200, pathDuration(pts)));
     if (reduced()) {
       const last = pts[pts.length - 1];
       carMarker.setLatLng(last);
       const sub = currentSubject();
       if (sub) updateProgressLine(sub, last);
-      finishTravel(onDone);
+      if (scenic) finishTravel(onDone);
+      else onDone?.();
       return;
     }
     const cum = cumDist(pts);
     const total = cum[cum.length - 1] || 1e-9;
     const t0 = performance.now();
-    const dur = opts.duration || pathDuration(pts);
+    const dur = opts.duration || Math.min(scenic ? pathDuration(pts) : 1800, pathDuration(pts));
     carFlipHold = 0;
     resetFollowCam(pts[0]);
     let lineTick = 0;
@@ -1185,16 +927,17 @@
       carMarker.setLatLng(ll);
       setCarFlip(pts, i0);
       const sub = currentSubject();
-      if (sub && (t >= 1 || (lineTick++ & 2) === 0)) updateProgressLine(sub, ll);
+      if (sub && (t >= 1 || (lineTick++ & 3) === 0)) updateProgressLine(sub, ll);
       if (pan) keepCarInView(ll);
       if (tapeFollowDrive) setTapeProgress(easeAlong(t));
       if (t < 1) {
         driveRaf = requestAnimationFrame(tick);
       } else {
         if (sub) updateProgressLine(sub, ll);
-        if (opts.flash !== false && pts.length > 10) FX.flash();
+        if (scenic && opts.flash !== false && pts.length > 10) FX.flash();
         if (zoomAfter) map.flyTo(pts[pts.length - 1], zoomAfter, { duration: 0.85 });
-        finishTravel(onDone);
+        if (scenic) finishTravel(onDone);
+        else onDone?.();
       }
     }
     driveRaf = requestAnimationFrame(tick);
@@ -1231,120 +974,72 @@
 
   function showOverview(opts = {}) {
     const { fly = true } = opts;
-    cancelRouteFade();
-    dayStage = "intro";
+    if (isOverview() && !fly) return;
     dayFollow = false;
-    followZooming = false;
-    holdFollowY = null;
     activeStop = null;
+    markStop(null);
     traveling = false;
     driveToken += 1;
     resetFollowCam(null);
     setDayChrome("overview");
-    syncStoryFocus(null, null, "intro");
     paintOverviewLines(fly);
     loadRoute(TRIP.overview);
   }
 
-  function setActiveDay(id, opts = {}) {
-    const { fly = true, force = false, follow = false } = opts;
-    if (id === "overview") {
-      showOverview({ fly });
-      return;
-    }
-    if (!force && id === activeDay && !follow) return;
+  function revealDay(id, opts = {}) {
+    const { fit = true } = opts;
     const day = dayOf(id);
     if (!day) return;
     const switched = id !== activeDay;
-    if (switched) {
-      cancelRouteFade();
+    if (!switched && !activeStop && !dayFollow) return;
+    activeDay = id;
+    if (switched || activeStop) {
       dayFollow = false;
-      followZooming = false;
-      holdFollowY = window.scrollY;
       activeStop = null;
+      markStop(null);
       resetFollowCam(null);
-      dayStage = "intro";
-    }
-    setDayChrome(id, activeStop, `${day.track} · ${day.date} · ${day.title}`);
-    const dense = denseRoute(day);
-    if (!dayFollow) carMarker.setLatLng(dense[0]);
-    paintDayLines(day, !dayFollow);
-    loadRoute(day);
-    if (fly && !dayFollow) {
-      ignoreScrollDrive = Date.now() + (isCompact() ? 800 : 1100);
-      fitSubject(day);
+      const dense = denseRoute(day);
+      if (!traveling) carMarker.setLatLng(dense[0]);
+      paintDayLines(day, true);
+      loadRoute(day);
+      setDayChrome(id);
+      if (fit) fitSubject(day, switched ? 0.7 : 0.5);
     }
   }
 
-  function followZoom() {
-    return isCompact() ? 12 : 13;
-  }
-
-  function highlightStop(id, opts = {}) {
-    const { fly = false, fromScroll = false, openPop = !fromScroll && !isCompact() } = opts;
+  function focusStop(id, opts = {}) {
+    const { fromScroll = false, fly = false } = opts;
     const found = stopOf(id);
     if (!found) return;
     const { stop, day } = found;
+    if (id === activeStop && day.id === activeDay) return;
 
-    cancelRouteFade();
-    dayStage = "follow";
+    if (day.id !== activeDay) {
+      activeDay = day.id;
+      paintDayLines(day, true);
+      loadRoute(day);
+      if (fromScroll) fitSubject(day, 0.55);
+    }
 
-    syncStoryFocus(day.id, id, "stops");
-
-    const entering = day.id !== activeDay;
-    if (entering) setActiveDay(day.id, { fly: false, force: true, follow: false });
-
-    const same = id === activeStop && !entering;
     activeStop = id;
+    dayFollow = true;
+    markStop(id);
     applyMarkerFocus(day.id, id);
     const now = $("#map-now");
     if (now) now.textContent = `${day.track} · ${stop.name}`;
 
     const dest = [stop.lat, stop.lng];
-    const dense = denseRoute(day);
-    const start = dense[0];
-
-    if (fromScroll && !dayFollow) {
-      dayFollow = true;
-      followZooming = true;
-      carMarker.setLatLng(start);
-      paintDayLines(day, false);
-      map.flyTo(start, followZoom(), { duration: 0.9 });
-      const token = ++driveToken;
-      map.once("moveend", () => {
-        if (token !== driveToken) return;
-        followZooming = false;
-        const path = buildPath(day, dest);
-        driveAlong(path, {
-          pan: true,
-          onDone: () => {
-            FX.caption(stop.name);
-            applyMarkerFocus(day.id, id);
-          },
-        });
-      });
-      return;
-    }
-
-    if (!dayFollow && !fromScroll) {
-      dayFollow = true;
-    }
-
     const cur = carMarker.getLatLng();
-    if (same && almost([cur.lat, cur.lng], dest)) {
-      if (openPop) markers[id]?.openPopup();
-      return;
-    }
+    if (almost([cur.lat, cur.lng], dest, 0.004)) return;
 
     const path = buildPath(day, dest);
-    if (!fromScroll) ignoreScrollDrive = Date.now() + pathDuration(path) + 120;
     driveAlong(path, {
-      pan: dayFollow,
-      zoomAfter: fly && !isCompact() ? followZoom() : null,
+      pan: fly && !fromScroll,
+      scenic: fly && !fromScroll,
       onDone: () => {
-        FX.caption(stop.name);
+        if (!fromScroll) FX.caption(stop.name);
         applyMarkerFocus(day.id, id);
-        if (openPop) markers[id]?.openPopup();
+        if (!fromScroll && fly && !isCompact()) markers[id]?.openPopup();
       },
     });
   }
@@ -1389,8 +1084,7 @@
       (e) => {
         e.preventDefault();
         if (e.ctrlKey || e.metaKey) return;
-        if (driveBusy()) pulseScrollGlow(e.deltaY);
-        applyScrollDelta(e.deltaY, e.deltaX);
+        window.scrollBy(e.deltaX, e.deltaY);
       },
       { passive: false }
     );
@@ -1418,7 +1112,7 @@
         );
         m.dayId = day.id;
         m.stopId = stop.id;
-        m.on("click", () => highlightStop(stop.id, { fly: true, fromScroll: false }));
+        m.on("click", () => focusStop(stop.id, { fly: true, fromScroll: false }));
         markers[stop.id] = m;
         m.addTo(map);
       });
@@ -1473,12 +1167,12 @@
       document.body.classList.remove("is-paused");
       FX.rainNotes(1800);
       const dur = Math.min(18000, Math.max(5200, pathDuration(pts) * 1.25));
-      ignoreScrollDrive = Date.now() + dur + 400;
       syncPlayButtons();
       driveAlong(pts, {
         duration: dur,
         pan: true,
         notes: true,
+        scenic: true,
         onDone: () => {
           if (hud) hud.textContent = "Проиграть сторону";
           dayFollow = false;
@@ -1500,12 +1194,12 @@
     document.body.classList.remove("is-paused");
     FX.rainNotes(2200);
     const dur = Math.min(14000, Math.max(3600, pathDuration(pts) * 1.2));
-    ignoreScrollDrive = Date.now() + dur + 400;
     syncPlayButtons();
     driveAlong(pts, {
       duration: dur,
       pan: true,
       notes: true,
+      scenic: true,
       onDone: () => {
         if (hud) hud.textContent = "Проиграть сторону";
         map.flyToBounds(L.latLngBounds(pts).pad(0.28), { duration: 0.8 });
@@ -1527,76 +1221,6 @@
     carMarker.setLatLng(pts[0]);
     paintDayLines(day, true);
     map.flyToBounds(L.latLngBounds(pts).pad(0.28), { duration: 0.9 });
-  }
-
-  function scrollBand() {
-    const atlas = $(".atlas");
-    const atlasBottom = atlas ? atlas.getBoundingClientRect().bottom : 0;
-    return isCompact()
-      ? Math.min(Math.max(atlasBottom + 36, window.innerHeight * 0.52), window.innerHeight * 0.72)
-      : window.innerHeight * 0.4;
-  }
-
-  function dayScrollPhase(dayEl, band) {
-    const start = dayEl.querySelector(".tour-start");
-    const end = dayEl.querySelector(".day-end");
-    if (!start) return "intro";
-    const startTop = start.getBoundingClientRect().top;
-    if (startTop > band + 28) return "intro";
-    if (end) {
-      const endTop = end.getBoundingClientRect().top;
-      if (endTop < band - 8) return "outro";
-    }
-    return "stops";
-  }
-
-  function targetFromScroll() {
-    const band = scrollBand();
-    const atlas = $(".atlas");
-    const atlasBottom = atlas ? atlas.getBoundingClientRect().bottom : 0;
-    const topCut = isCompact() ? Math.max(90, atlasBottom - 8) : 90;
-
-    let host = null;
-    let hostD = Infinity;
-    document.querySelectorAll(".day").forEach((el) => {
-      const r = el.getBoundingClientRect();
-      if (r.bottom < topCut || r.top > window.innerHeight - 24) return;
-      if (r.top <= band && r.bottom >= band) {
-        host = el;
-        hostD = 0;
-        return;
-      }
-      const d = r.bottom < band ? band - r.bottom : r.top - band;
-      if (d < hostD) {
-        hostD = d;
-        host = el;
-      }
-    });
-    if (!host) return null;
-    if (host.classList.contains("overview-day")) return { type: "overview" };
-
-    const phase = dayScrollPhase(host, band);
-    if (phase === "intro") return { type: "day", id: host.id, phase: "intro" };
-    if (phase === "outro") return { type: "day", id: host.id, phase: "outro" };
-
-    let bestScene = null;
-    let bestSceneD = Infinity;
-    host.querySelectorAll(".stop-scene").forEach((el) => {
-      const r = el.getBoundingClientRect();
-      if (r.height < 24) return;
-      if (r.top <= band && r.bottom >= band) {
-        bestScene = el;
-        bestSceneD = 0;
-        return;
-      }
-      const d = r.bottom < band ? band - r.bottom : r.top - band;
-      if (d < bestSceneD) {
-        bestSceneD = d;
-        bestScene = el;
-      }
-    });
-    if (bestScene) return { type: "stop", id: bestScene.dataset.stopScene };
-    return { type: "day", id: host.id, phase: "stops" };
   }
 
   function clamp01(v) {
@@ -1626,6 +1250,82 @@
     setTapeProgress((window.scrollY - start) / Math.max(1, end - start));
   }
 
+  function spyMargin() {
+    if (isCompact()) {
+      const atlas = $(".atlas");
+      const top = atlas ? Math.round(atlas.getBoundingClientRect().bottom + 10) : 280;
+      const band = 120;
+      const bot = Math.max(48, Math.round(window.innerHeight - top - band));
+      return `-${top}px 0px -${bot}px 0px`;
+    }
+    return "-28% 0px -56% 0px";
+  }
+
+  function applySpy() {
+    let bestStop = null;
+    let stopR = 0;
+    let bestLead = null;
+    let leadR = 0;
+    let ov = 0;
+    spyRatios.forEach((r, el) => {
+      if (!r) return;
+      if (el.classList.contains("stop")) {
+        if (r > stopR) {
+          stopR = r;
+          bestStop = el;
+        }
+      } else if (el.id === "overview") {
+        ov = r;
+      } else if (el.classList.contains("day-lead")) {
+        if (r > leadR) {
+          leadR = r;
+          bestLead = el;
+        }
+      }
+    });
+    if (ov > 0.18 && ov >= stopR && ov >= leadR) {
+      showOverview({ fly: activeDay !== "overview" });
+      return;
+    }
+    if (bestStop && stopR > 0.08 && stopR >= leadR) {
+      focusStop(bestStop.dataset.stop, { fromScroll: true });
+      return;
+    }
+    if (bestLead && leadR > 0.08) {
+      const dayEl = bestLead.closest(".day");
+      if (dayEl) revealDay(dayEl.id);
+    }
+  }
+
+  function initScrollSpy() {
+    if (spy) spy.disconnect();
+    spyRatios = new Map();
+    spy = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((e) => spyRatios.set(e.target, e.isIntersecting ? e.intersectionRatio : 0));
+        if (spyTick) return;
+        spyTick = requestAnimationFrame(() => {
+          spyTick = 0;
+          applySpy();
+        });
+      },
+      {
+        root: null,
+        rootMargin: spyMargin(),
+        threshold: [0, 0.12, 0.28, 0.5, 0.75, 1],
+      }
+    );
+    const overview = $("#overview");
+    if (overview) spy.observe(overview);
+    document.querySelectorAll(".day-lead, .stop").forEach((el) => spy.observe(el));
+  }
+
+  function cacheStopEls() {
+    document.querySelectorAll(".stop[data-stop]").forEach((el) => {
+      stopEls[el.dataset.stop] = el;
+    });
+  }
+
   function syncPlayButtons() {
     const on = traveling || TAPE.isPlaying();
     const label = on ? "❚❚" : "▶";
@@ -1642,9 +1342,7 @@
   function stopTape() {
     driveToken += 1;
     traveling = false;
-    followZooming = false;
     tapeFollowDrive = false;
-    queuedScrollTarget = null;
     FX.travelOff();
     userPaused = true;
     TAPE.stop();
@@ -1657,7 +1355,7 @@
   }
 
   function togglePlay() {
-    if (traveling || followZooming) {
+    if (traveling) {
       stopTape();
       return;
     }
@@ -1684,15 +1382,11 @@
     const el = document.getElementById(id);
     driveToken += 1;
     traveling = false;
-    followZooming = false;
     tapeFollowDrive = false;
-    queuedScrollTarget = null;
     FX.travelOff();
     if (el) el.scrollIntoView({ behavior: "instant", block: "start" });
     if (id === "overview") showOverview({ fly: true });
-    else enterDayIntro(id);
-    holdFollowY = window.scrollY;
-    ignoreScrollDrive = Date.now() + 1100;
+    else revealDay(id, { fit: true });
     history.replaceState(null, "", "#" + id);
     syncPlayButtons();
     updateTapeProgress();
@@ -1817,69 +1511,6 @@
     requestAnimationFrame(render);
   }
 
-  function applyScrollTarget(target) {
-    if (!target) return;
-    if (holdFollowY != null && Math.abs(window.scrollY - holdFollowY) < 48) {
-      if (target.type === "overview" && !isOverview()) showOverview({ fly: true });
-      else if (target.type === "day" && target.id !== activeDay) enterDayIntro(target.id);
-      return;
-    }
-    if (holdFollowY != null) holdFollowY = null;
-    if (target.type === "overview") {
-      if (!isOverview()) {
-        if (activeDay) crossfadeToDay("overview", { stage: "intro" });
-        else showOverview({ fly: true });
-      }
-      return;
-    }
-    if (target.type === "day") {
-      if (target.phase === "outro") enterDayOutro(target.id);
-      else if (target.phase === "stops") {
-        if (target.id !== activeDay) enterDayIntro(target.id);
-        const day = dayOf(target.id);
-        const first = day?.stops?.[0];
-        if (first && !activeStop) highlightStop(first.id, { fromScroll: true, fly: false });
-        else if (day) syncStoryFocus(target.id, activeStop, "stops");
-      } else enterDayIntro(target.id);
-      return;
-    }
-    if (target.type === "stop") {
-      const found = stopOf(target.id);
-      if (!found) return;
-      if (found.day.id !== activeDay) {
-        enterDayIntro(found.day.id);
-        return;
-      }
-      if (target.id !== activeStop) {
-        highlightStop(target.id, { fromScroll: true, fly: false });
-      }
-    }
-  }
-
-  function flushQueuedScroll() {
-    const q = queuedScrollTarget;
-    queuedScrollTarget = null;
-    if (Date.now() < ignoreScrollDrive) return;
-    if (q && targetIsCurrentDay(q)) applyScrollTarget(q);
-    else onScrollFrame();
-  }
-
-  function onScrollFrame() {
-    if (driveBusy()) {
-      if (clampScrollToDay()) pulseScrollGlow(80);
-      if (Date.now() < ignoreScrollDrive) return;
-      const target = targetFromScroll();
-      if (target && targetIsCurrentDay(target) && target.type === "stop") {
-        queuedScrollTarget = target;
-      }
-      return;
-    }
-    if (Date.now() < ignoreScrollDrive) return;
-    const target = targetFromScroll();
-    if (!target) return;
-    applyScrollTarget(target);
-  }
-
   function bind() {
     $("#story").addEventListener("click", (e) => {
       const ov = e.target.closest("[data-ov]");
@@ -1893,23 +1524,10 @@
         ovMarkers.find((m) => m.ovId === id)?.openPopup();
         return;
       }
-      const jump = e.target.closest("[data-jump-stop]");
-      if (jump) {
-        const id = jump.dataset.jumpStop;
-        highlightStop(id, { fly: true, fromScroll: false });
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            document.getElementById("scene-" + id)?.scrollIntoView({
-              behavior: reduced() ? "auto" : "smooth",
-              block: "start",
-            });
-          });
-        });
-        return;
-      }
       const stop = e.target.closest(".stop");
       if (!stop || e.target.closest("a") || e.target.matches(".check")) return;
-      highlightStop(stop.dataset.stop, { fly: true, fromScroll: false });
+      stop.scrollIntoView({ behavior: reduced() ? "auto" : "smooth", block: "center" });
+      focusStop(stop.dataset.stop, { fly: true, fromScroll: false });
     });
 
     $("#story").addEventListener("change", (e) => {
@@ -1965,63 +1583,17 @@
       recTime.textContent = `00:${mm}:${ss}`;
     }, 1000);
 
-    let scrollTick = 0;
+    let tapeTick = 0;
     window.addEventListener(
       "scroll",
       () => {
-        if (scrollTick) return;
-        scrollTick = requestAnimationFrame(() => {
-          scrollTick = 0;
-          onScrollFrame();
+        if (tapeTick) return;
+        tapeTick = requestAnimationFrame(() => {
+          tapeTick = 0;
           updateTapeProgress();
         });
       },
       { passive: true }
-    );
-
-    window.addEventListener(
-      "wheel",
-      (e) => {
-        if (!driveBusy()) return;
-        pulseScrollGlow(e.deltaY);
-        if (e.deltaY <= 0) return;
-        const limit = nextDayLimitY();
-        if (limit == null) return;
-        const root = pageRoot();
-        if (root.scrollTop + e.deltaY >= limit - 0.5) {
-          e.preventDefault();
-          root.scrollTop = limit;
-        }
-      },
-      { passive: false }
-    );
-
-    let touchY = null;
-    window.addEventListener(
-      "touchstart",
-      (e) => {
-        touchY = e.touches[0]?.clientY ?? null;
-      },
-      { passive: true }
-    );
-    window.addEventListener(
-      "touchmove",
-      (e) => {
-        if (!driveBusy() || touchY == null) return;
-        const y = e.touches[0]?.clientY;
-        if (y == null) return;
-        const dy = touchY - y;
-        pulseScrollGlow(dy);
-        if (dy <= 0) return;
-        const limit = nextDayLimitY();
-        if (limit == null) return;
-        const root = pageRoot();
-        if (root.scrollTop + dy >= limit - 0.5) {
-          e.preventDefault();
-          root.scrollTop = limit;
-        }
-      },
-      { passive: false }
     );
 
     const mixtape = $("#mixtape");
@@ -2040,6 +1612,7 @@
     compactMq.addEventListener("change", () => {
       syncCompact();
       applyMapTouchMode();
+      initScrollSpy();
     });
     window.addEventListener("resize", () => {
       syncCompact();
@@ -2061,10 +1634,12 @@
 
   renderNav();
   renderStory();
+  cacheStopEls();
   renderStays();
   renderTape();
   FX.init();
   initCassette();
   initMap();
   bind();
+  initScrollSpy();
 })();

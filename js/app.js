@@ -25,43 +25,6 @@
 
   const saved = JSON.parse(localStorage.getItem("mne-tapes") || "{}");
 
-  const LAND = [
-    [41.877, 19.247],
-    [41.93, 19.18],
-    [42.05, 19.1],
-    [42.18, 18.97],
-    [42.28, 18.84],
-    [42.39, 18.71],
-    [42.486, 18.698],
-    [42.45, 18.53],
-    [42.42, 18.44],
-    [42.58, 18.5],
-    [42.76, 18.66],
-    [42.96, 18.8],
-    [43.16, 18.88],
-    [43.35, 19.02],
-    [43.548, 19.22],
-    [43.5, 19.48],
-    [43.3, 19.7],
-    [43.08, 19.92],
-    [42.88, 20.08],
-    [42.84, 20.166],
-    [42.68, 19.98],
-    [42.52, 19.74],
-    [42.4, 19.52],
-    [42.26, 19.4],
-    [42.08, 19.36],
-    [41.94, 19.3],
-  ];
-
-  const CITIES = [
-    { name: "Котор", lat: 42.425, lng: 18.771 },
-    { name: "Ловчен", lat: 42.4, lng: 18.82 },
-    { name: "Подгорица", lat: 42.441, lng: 19.262 },
-    { name: "Шавник", lat: 42.956, lng: 19.097 },
-    { name: "Дурмитор", lat: 43.155, lng: 19.123 },
-  ];
-
   let userPaused = false;
   let dockedDeck = false;
   let inserted = false;
@@ -564,142 +527,153 @@
     return { init, play, pause, stop, isPlaying, wantsPlay };
   })();
 
-  function densify(latlngs, per = 10) {
-    if (!latlngs || latlngs.length < 2) return latlngs ? latlngs.slice() : [];
-    const out = [];
-    for (let i = 0; i < latlngs.length - 1; i++) {
-      const a = latlngs[i];
-      const b = latlngs[i + 1];
-      for (let s = 0; s < per; s++) {
-        const t = s / per;
-        out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
-      }
+  function makeWave(x0, x1, y, amp, turns) {
+    const steps = 48;
+    let d = "";
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const x = x0 + (x1 - x0) * t;
+      const yy = y + Math.sin(t * Math.PI * 2 * turns) * amp;
+      d += `${i ? "L" : "M"}${x.toFixed(1)},${yy.toFixed(1)}`;
     }
-    out.push(latlngs[latlngs.length - 1]);
-    return out;
+    return d;
   }
 
-  function project(lat, lng) {
-    const x = 22 + ((lng - 18.38) / (20.22 - 18.38)) * 196;
-    const y = 18 + (1 - (lat - 41.85) / (43.58 - 41.85)) * 284;
-    return [x, y];
-  }
+  const ROAD_STOPS = [
+    { name: "аэропорт", t: 0 },
+    { name: "Подгорица", t: 0.18 },
+    { name: "Котор", t: 0.38 },
+    { name: "Дурмитор", t: 0.62 },
+    { name: "Подгорица", t: 0.82 },
+    { name: "аэропорт", t: 1 },
+  ];
 
-  function ptsPath(pts) {
-    return pts
-      .map((p, i) => {
-        const [x, y] = project(p[0], p[1]);
-        return `${i ? "L" : "M"}${x.toFixed(2)},${y.toFixed(2)}`;
-      })
-      .join(" ");
-  }
-
-  function nearestIndex(pts, lat, lng) {
-    let bi = 0;
-    let bd = Infinity;
-    for (let i = 0; i < pts.length; i++) {
-      const d = (pts[i][0] - lat) ** 2 + (pts[i][1] - lng) ** 2;
-      if (d < bd) {
-        bd = d;
-        bi = i;
-      }
-    }
-    return bi;
-  }
+  const ROAD_CLOUDS = [
+    { t: 0.07, s: 0.92 },
+    { t: 0.22, s: 1.18 },
+    { t: 0.37, s: 0.84 },
+    { t: 0.52, s: 1.08 },
+    { t: 0.68, s: 0.9 },
+    { t: 0.84, s: 1.14 },
+    { t: 0.96, s: 0.78 },
+  ];
 
   const FILM = (() => {
     let frames = [];
-    let journey = [];
     let drawPath = null;
+    let ghostPath = null;
     let pathLen = 0;
     let carEl = null;
+    let svgEl = null;
+    let fluff = [];
+    let stopDots = [];
     let imgA = null;
     let imgB = null;
     let front = "a";
     let currentSrc = "";
     let carT = 0;
-    let ticking = false;
+    let raf = 0;
+    let lastBest = 0;
+    let pendingBg = "";
+    let bgTimer = 0;
+    let travelHold = 0;
+    let shownNow = "";
+    let nowTimer = 0;
     let glow = null;
 
-    function buildJourney() {
-      const pts = [];
-      TRIP.days.forEach((day) => {
-        const route = day.route && day.route.length > 1 ? day.route : day.stops.map((s) => [s.lat, s.lng]);
-        densify(route, 8).forEach((p) => pts.push(p));
-      });
-      journey = pts;
-    }
-
-    function paintBoard() {
-      const svg = $("#board-svg");
+    function paintRoad() {
+      const svg = $("#road-svg");
       if (!svg) return;
-      const landD = ptsPath(LAND.concat([LAND[0]]));
-      const ghostD = ptsPath(journey);
-      const dayPaths = TRIP.days
-        .map((day) => {
-          const route = day.route && day.route.length > 1 ? day.route : day.stops.map((s) => [s.lat, s.lng]);
-          return `<path class="board-day" d="${ptsPath(densify(route, 6))}" stroke="${day.color}" />`;
-        })
-        .join("");
-      const labels = CITIES.map((c) => {
-        const [x, y] = project(c.lat, c.lng);
-        return `<text class="board-label" x="${x.toFixed(1)}" y="${(y - 6).toFixed(1)}">${c.name}</text>`;
-      }).join("");
+      svgEl = svg;
+      const d = makeWave(64, 1136, 118, 16, 2.15);
       svg.innerHTML = `
-        <defs>
-          <filter id="board-glow" x="-40%" y="-40%" width="180%" height="180%">
-            <feGaussianBlur stdDeviation="1.6" result="b"/>
-            <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-          </filter>
-        </defs>
-        <path class="board-land" d="${landD}" />
-        <path class="board-ghost" d="${ghostD}" />
-        ${dayPaths}
-        <path class="board-draw" id="board-draw" d="${ghostD}" />
-        ${labels}
-        <g id="board-car" filter="url(#board-glow)">
-          <circle class="car-halo" r="9" />
-          <circle class="car-core" r="3.4" />
+        <path class="road-ghost" id="road-ghost" d="${d}" fill="none"/>
+        <path class="road-draw" id="road-draw" d="${d}" fill="none"/>
+        <g id="road-clouds"></g>
+        <g id="road-stops"></g>
+        <g id="road-car">
+          <g class="road-van" transform="translate(0,-11) scale(1.45)">
+            <g class="road-exhaust">
+              <circle class="road-puff-a" cx="-30" cy="-16" r="5.2"/>
+              <circle class="road-puff-b" cx="-40" cy="-24" r="3.4"/>
+            </g>
+            <ellipse class="road-van-shadow" cx="0" cy="9" rx="20" ry="3.2"/>
+            <path class="road-van-body" d="M-24 3h9l5-13h18l7 8h11v12H-24z"/>
+            <rect class="road-van-stripe" x="-14" y="-1.5" width="30" height="3.2" rx="0.6"/>
+            <rect class="road-van-glass" x="-8" y="-8.5" width="9.5" height="6" rx="1.1"/>
+            <rect class="road-van-glass" x="3.5" y="-8.5" width="8.5" height="6" rx="1.1"/>
+            <circle class="road-van-wheel" cx="-12" cy="10" r="5.4"/>
+            <circle class="road-van-hub" cx="-12" cy="10" r="2.3"/>
+            <circle class="road-van-wheel" cx="13" cy="10" r="5.4"/>
+            <circle class="road-van-hub" cx="13" cy="10" r="2.3"/>
+          </g>
         </g>`;
-      drawPath = $("#board-draw");
-      carEl = $("#board-car");
-      pathLen = drawPath ? drawPath.getTotalLength() : 0;
+      ghostPath = $("#road-ghost");
+      drawPath = $("#road-draw");
+      carEl = $("#road-car");
+      pathLen = ghostPath ? ghostPath.getTotalLength() : 0;
       if (drawPath && pathLen) {
         drawPath.style.strokeDasharray = String(pathLen);
         drawPath.style.strokeDashoffset = String(pathLen);
       }
+      if (!ghostPath || !pathLen) return;
 
-      const trace = $("#stage-trace");
-      if (trace) {
-        trace.innerHTML = `
-          <path class="trace-land" d="${landD}" />
-          <path class="trace-draw" d="${ghostD}" />`;
-      }
+      const NS = "http://www.w3.org/2000/svg";
+      const cloudRoot = $("#road-clouds");
+      fluff = ROAD_CLOUDS.map((c, i) => {
+        const p = ghostPath.getPointAtLength(c.t * pathLen);
+        const g = document.createElementNS(NS, "g");
+        g.classList.add("road-fluff");
+        g.setAttribute("transform", `translate(${p.x.toFixed(1)} ${(p.y - 42).toFixed(1)}) scale(${c.s})`);
+        g.style.opacity = "0";
+        g.style.animationDelay = `${i * 0.4}s`;
+        const path = document.createElementNS(NS, "path");
+        path.setAttribute("d", "M0 12c4-11 18-13 24-3 7-10 22-8 24 3 10-2 13 10 3 13H4C-8 26-10 16-2 12z");
+        g.appendChild(path);
+        cloudRoot.appendChild(g);
+        return { el: g, t: c.t };
+      });
+
+      const stopRoot = $("#road-stops");
+      stopDots = ROAD_STOPS.map((s) => {
+        const p = ghostPath.getPointAtLength(s.t * pathLen);
+        const g = document.createElementNS(NS, "g");
+        g.classList.add("road-stop");
+        g.setAttribute("transform", `translate(${p.x.toFixed(1)} ${p.y.toFixed(1)})`);
+        const halo = document.createElementNS(NS, "circle");
+        halo.setAttribute("class", "road-stop-halo");
+        halo.setAttribute("r", "9");
+        const dot = document.createElementNS(NS, "circle");
+        dot.setAttribute("class", "road-stop-dot");
+        dot.setAttribute("r", "4");
+        const label = document.createElementNS(NS, "text");
+        label.setAttribute("class", "road-stop-name");
+        label.setAttribute("y", "22");
+        label.textContent = s.name;
+        g.appendChild(halo);
+        g.appendChild(dot);
+        g.appendChild(label);
+        stopRoot.appendChild(g);
+        return { el: g, t: s.t };
+      });
     }
 
     function assignT() {
       frames = [...document.querySelectorAll(".frame")];
-      frames.forEach((el) => {
-        const lat = parseFloat(el.dataset.lat);
-        const lng = parseFloat(el.dataset.lng);
-        if (!journey.length || Number.isNaN(lat)) {
-          el.dataset.t = "0";
-          return;
-        }
-        const i = nearestIndex(journey, lat, lng);
-        el.dataset.t = (i / Math.max(1, journey.length - 1)).toFixed(4);
+      const n = Math.max(1, frames.length - 1);
+      frames.forEach((el, i) => {
+        el.dataset.t = (i / n).toFixed(4);
       });
     }
 
-    function focusOf(el) {
-      const r = el.getBoundingClientRect();
+    function focusFromRect(r, vh) {
       const mid = (r.top + r.bottom) / 2;
-      const c = window.innerHeight * 0.5;
-      const span = window.innerHeight * 0.58;
+      const c = vh * 0.48;
+      const span = vh * 0.4;
       return smoothstep(1 - Math.min(1, Math.abs(mid - c) / span));
     }
 
-    function setBg(src) {
+    function applyBg(src) {
       if (!src || src === currentSrc || !imgA || !imgB) return;
       const back = front === "a" ? imgB : imgA;
       const fore = front === "a" ? imgA : imgB;
@@ -710,42 +684,116 @@
       currentSrc = src;
     }
 
+    function queueBg(src) {
+      if (!src || src === currentSrc) return;
+      pendingBg = src;
+      window.clearTimeout(bgTimer);
+      bgTimer = window.setTimeout(() => {
+        bgTimer = 0;
+        applyBg(pendingBg);
+      }, 70);
+    }
+
+    function setNow(text) {
+      const nowEl = $("#board-now");
+      if (!nowEl || text === shownNow) return;
+      shownNow = text;
+      if (reduced()) {
+        nowEl.textContent = text;
+        return;
+      }
+      nowEl.classList.add("is-dim");
+      window.clearTimeout(nowTimer);
+      nowTimer = window.setTimeout(() => {
+        nowEl.textContent = text;
+        nowEl.classList.remove("is-dim");
+      }, 160);
+    }
+
     function placeCar(t) {
-      if (!drawPath || !carEl) return;
-      if (!pathLen) {
-        pathLen = drawPath.getTotalLength();
-        if (pathLen) {
-          drawPath.style.strokeDasharray = String(pathLen);
+      if (!ghostPath || !pathLen) return;
+      const d = clamp01(t) * pathLen;
+      const p = ghostPath.getPointAtLength(d);
+      const p2 = ghostPath.getPointAtLength(Math.min(pathLen, d + 10));
+      const ang = (Math.atan2(p2.y - p.y, p2.x - p.x) * 180) / Math.PI;
+      if (carEl) {
+        carEl.setAttribute("transform", `translate(${p.x.toFixed(1)} ${p.y.toFixed(1)}) rotate(${ang.toFixed(2)})`);
+      }
+      if (drawPath) drawPath.style.strokeDashoffset = String(pathLen * (1 - t));
+
+      fluff.forEach((c) => {
+        const appear = smoothstep(clamp01((t - (c.t - 0.1)) / 0.14));
+        c.el.style.opacity = appear.toFixed(3);
+      });
+      stopDots.forEach((s) => {
+        s.el.classList.toggle("is-passed", t >= s.t - 0.012);
+        s.el.classList.toggle("is-here", Math.abs(t - s.t) < 0.045);
+      });
+
+      const say = $("#road-say");
+      if (say && svgEl) {
+        const ctm = svgEl.getScreenCTM();
+        const road = $("#road");
+        if (ctm && road) {
+          const box = road.getBoundingClientRect();
+          const x = ctm.a * p.x + ctm.e - box.left;
+          const y = ctm.d * p.y + ctm.f - box.top;
+          const maxX = Math.max(16, box.width - 188);
+          say.style.setProperty("--say-x", `${Math.max(12, Math.min(maxX, x - 36)).toFixed(1)}px`);
+          say.style.setProperty("--say-y", `${Math.max(4, y - 78).toFixed(1)}px`);
         }
       }
-      if (!pathLen) return;
-      const p = drawPath.getPointAtLength(t * pathLen);
-      carEl.setAttribute("transform", `translate(${p.x.toFixed(2)} ${p.y.toFixed(2)})`);
-      drawPath.style.strokeDashoffset = String(pathLen * (1 - t));
     }
 
     function tick() {
-      ticking = false;
-      if (!frames.length) return;
+      if (!frames.length) {
+        raf = 0;
+        return;
+      }
       const vh = window.innerHeight;
+      const motion = !reduced();
+      const lerpF = motion ? 0.15 : 1;
+      const lerpCar = motion ? 0.1 : 1;
+
+      const raw = frames.map((el) => {
+        const r = el.getBoundingClientRect();
+        if (r.bottom < -vh * 0.2 || r.top > vh * 1.2) return 0;
+        return motion
+          ? focusFromRect(r, vh)
+          : Math.abs((r.top + r.bottom) / 2 - vh * 0.5) < vh * 0.45
+            ? 1
+            : 0.18;
+      });
+
       let best = 0;
       let bestF = -1;
-      frames.forEach((el, i) => {
-        const r = el.getBoundingClientRect();
-        if (r.bottom < -40 || r.top > vh + 40) {
-          el.style.setProperty("--focus", "0");
-          return;
-        }
-        const f = reduced() ? (Math.abs((r.top + r.bottom) / 2 - vh * 0.5) < vh * 0.45 ? 1 : 0.35) : focusOf(el);
-        el.style.setProperty("--focus", f.toFixed(3));
-        if (f > bestF) {
-          bestF = f;
+      frames.forEach((_, i) => {
+        if (raw[i] > bestF) {
+          bestF = raw[i];
           best = i;
         }
       });
+      if (raw[lastBest] >= 0.16 && raw[lastBest] + 0.07 >= bestF) best = lastBest;
+      lastBest = best;
+
+      let moving = false;
+      frames.forEach((el, i) => {
+        let target = raw[i];
+        if (i === best) target = Math.max(target, 0.86);
+        else target *= 0.42;
+        const prev = parseFloat(el.style.getPropertyValue("--focus")) || 0;
+        let next = prev + (target - prev) * lerpF;
+        if (Math.abs(next - target) < 0.003) next = target;
+        else moving = true;
+        el.style.setProperty("--focus", next.toFixed(3));
+        el.style.zIndex = String(4 + Math.round(next * 24));
+      });
 
       const el = frames[best];
-      if (!el) return;
+      if (!el) {
+        raf = 0;
+        return;
+      }
       const day = el.dataset.day || "overview";
       if (day !== activeDay) {
         activeDay = day;
@@ -756,41 +804,50 @@
         lastDayFlash = day;
       }
 
-      const now = el.dataset.now || "";
-      const nowEl = $("#board-now");
-      if (nowEl && nowEl.textContent !== now) nowEl.textContent = now;
+      setNow(el.dataset.now || "");
       const playEl = $("#now-play");
       if (playEl) {
         const dayObj = TRIP.days.find((d) => d.id === day);
         playEl.textContent = dayObj ? `▶ ${dayObj.track}` : "▶ SIDE A";
       }
-      FX.caption(now);
 
-      setBg(el.dataset.photo || currentSrc);
+      queueBg(el.dataset.photo || currentSrc);
 
       const kind = el.dataset.kind;
       const shouldTravel = kind === "drive" || el.classList.contains("frame--reel");
-      if (shouldTravel) FX.travelOn();
-      else FX.travelOff();
+      if (shouldTravel) travelHold = Math.min(4, travelHold + 1);
+      else travelHold = Math.max(0, travelHold - 1);
+      if (travelHold >= 3) {
+        if (!traveling) FX.travelOn();
+      } else if (travelHold <= 0 && traveling) {
+        FX.travelOff();
+      }
+
+      const film = $("#film");
+      if (film) {
+        const fr = film.getBoundingClientRect();
+        document.body.classList.toggle("is-on-road", fr.top < vh * 0.78 && fr.bottom > 90);
+      }
 
       const t0 = parseFloat(el.dataset.t) || 0;
-      carT += (t0 - carT) * (reduced() ? 1 : 0.18);
+      const prevCar = carT;
+      carT += (t0 - carT) * lerpCar;
       placeCar(clamp01(carT));
+      if (Math.abs(carT - prevCar) > 0.0004) moving = true;
       updateTapeProgress();
+
+      raf = moving ? requestAnimationFrame(tick) : 0;
     }
 
     function onScroll() {
-      if (ticking) return;
-      ticking = true;
-      requestAnimationFrame(tick);
+      if (!raf) raf = requestAnimationFrame(tick);
     }
 
     function init() {
       imgA = $("#stage-a");
       imgB = $("#stage-b");
       glow = $("#scroll-glow");
-      buildJourney();
-      paintBoard();
+      paintRoad();
       assignT();
       const first = photoUrl("road") || TRIP.photos.kotor;
       if (imgA && first) {
@@ -800,7 +857,7 @@
       }
       window.addEventListener("scroll", onScroll, { passive: true });
       window.addEventListener("resize", onScroll);
-      requestAnimationFrame(tick);
+      onScroll();
     }
 
     return { init, tick };

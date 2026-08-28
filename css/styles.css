@@ -63,6 +63,8 @@ html.deck-docked {
 html {
   scroll-behavior: auto;
   -webkit-text-size-adjust: 100%;
+  scroll-snap-type: y proximity;
+  scroll-padding-top: var(--top);
 }
 
 html,
@@ -1132,8 +1134,8 @@ body.is-traveling .road-puff-b {
 
 .frame {
   position: relative;
-  width: min(540px, 92vw);
-  min-height: 88vh;
+  width: min(560px, 94vw);
+  min-height: 104vh;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1145,37 +1147,43 @@ body.is-traveling .road-puff-b {
   isolation: isolate;
 }
 
+.frame--day,
+.frame--shot,
+.frame--over {
+  scroll-snap-align: center;
+}
+
 .frame--day {
-  min-height: 102vh;
+  min-height: 122vh;
 }
 
 .frame--shot {
-  min-height: 96vh;
+  min-height: 118vh;
 }
 
 .frame--reel {
-  min-height: 72vh;
+  min-height: 86vh;
 }
 
 .frame--over {
-  min-height: 108vh;
+  min-height: 126vh;
   gap: 28px;
 }
 
 .frame-shot {
   position: relative;
-  width: min(400px, 78vw);
+  width: min(472px, 86vw);
   margin: 0;
   background: #fff8ee;
-  padding: 12px 12px 48px;
+  padding: 14px 14px 52px;
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.7) inset,
     0 24px 60px rgba(0, 0, 0, 0.42);
   transform:
-    translate3d(0, calc((1 - var(--focus)) * 16px), 0)
-    scale(calc(0.9 + var(--focus) * 0.1))
+    translate3d(0, calc((1 - var(--focus)) * 18px), 0)
+    scale(calc(0.76 + var(--focus) * 0.28))
     rotate(calc(var(--tilt, -1.8) * (0.42 - var(--focus) * 0.28) * 1deg));
-  opacity: calc(0.58 + var(--focus) * 0.42);
+  opacity: calc(0.52 + var(--focus) * 0.48);
   transform-origin: 50% 58%;
   will-change: transform, opacity;
 }
@@ -1273,11 +1281,11 @@ body.is-traveling .road-puff-b {
 }
 
 .frame-cluster {
-  width: min(480px, 90vw);
+  width: min(520px, 92vw);
   display: grid;
   gap: 10px;
-  transform: scale(calc(0.94 + var(--focus) * 0.06)) translate3d(0, calc((1 - var(--focus)) * 12px), 0);
-  opacity: calc(0.52 + var(--focus) * 0.48);
+  transform: scale(calc(0.86 + var(--focus) * 0.16)) translate3d(0, calc((1 - var(--focus)) * 12px), 0);
+  opacity: calc(0.48 + var(--focus) * 0.52);
   will-change: transform, opacity;
 }
 
@@ -1914,16 +1922,16 @@ body.is-traveling .grain {
   .frame--day,
   .frame--shot,
   .frame--over {
-    min-height: 92vh;
+    min-height: 108vh;
   }
 
   .frame--reel {
-    min-height: 64vh;
+    min-height: 78vh;
   }
 
   .frame-shot {
-    width: min(84vw, 360px);
-    padding: 10px 10px 40px;
+    width: min(90vw, 400px);
+    padding: 12px 12px 44px;
   }
 
   .mixtape {
@@ -1986,6 +1994,7 @@ body.is-traveling .grain {
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
+    scroll-snap-type: none;
   }
   .grain,
   .reel,

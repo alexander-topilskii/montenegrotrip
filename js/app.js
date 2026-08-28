@@ -26,9 +26,44 @@
   const saved = JSON.parse(localStorage.getItem("mne-tapes") || "{}");
 
   function renderStory() {
+    const ov = TRIP.overview;
+    const overviewHtml = `
+      <section class="day overview-day" id="overview">
+        <div class="day-head">
+          <div class="hwy" aria-hidden="true">00</div>
+          <div>
+            <p class="slug">${ov.slug}</p>
+            <h2>${ov.title}</h2>
+            <div class="meta">
+              <span class="chip">весь маршрут</span>
+              <span class="chip">без следования</span>
+              <span class="chip">~650 км</span>
+            </div>
+          </div>
+        </div>
+        <blockquote class="liner">${ov.quote}</blockquote>
+        <p class="summary">${ov.summary}</p>
+        <ol class="spine">
+          ${ov.points
+            .map(
+              (p) => `
+            <li data-ov="${p.id}" data-lat="${p.lat}" data-lng="${p.lng}">
+              <span class="n">${p.n}</span>
+              <div>
+                <h3>${p.name}</h3>
+                <p>${p.place}</p>
+              </div>
+            </li>`
+            )
+            .join("")}
+        </ol>
+      </section>`;
+
     const root = $("#story");
-    root.innerHTML = TRIP.days
-      .map((day) => {
+    root.innerHTML =
+      overviewHtml +
+      TRIP.days
+        .map((day) => {
         const photo = TRIP.photos[day.photo];
         const stops = day.stops
           .map((stop) => {
@@ -68,8 +103,8 @@
           <p class="summary">${day.summary}</p>
           <div class="stops">${stops}</div>
         </section>`;
-      })
-      .join("");
+        })
+        .join("");
   }
 
   function renderStays() {
@@ -97,9 +132,12 @@
   }
 
   function renderNav() {
-    $("#days-nav").innerHTML = TRIP.days
-      .map((d) => `<a href="#${d.id}" data-day="${d.id}" title="${d.date}">${d.date.split(" ")[0]}</a>`)
-      .join("");
+    const ov = `<a href="#overview" data-day="overview" title="Весь маршрут">◯</a>`;
+    $("#days-nav").innerHTML =
+      ov +
+      TRIP.days
+        .map((d) => `<a href="#${d.id}" data-day="${d.id}" title="${d.date}">${d.date.split(" ")[0]}</a>`)
+        .join("");
   }
 
   const FX = (() => {
@@ -318,7 +356,11 @@
   let driveRaf = 0;
   let driveToken = 0;
   let traveling = false;
-  const denseCache = {};
+  const routes = {};
+  const ovMarkers = [];
+  let dayFollow = false;
+  let followZooming = false;
+  let holdFollowY = null;
   let ritualDone = sessionStorage.getItem("mne-tape-ritual") === "1";
   let sawInsert = false;
   let ignoreScrollDrive = 0;
@@ -366,12 +408,89 @@
     return null;
   }
 
-  function denseRoute(day, n = 130) {
-    if (!denseCache[day.id]) {
-      const pts = day.route && day.route.length > 1 ? day.route : day.stops.map((s) => [s.lat, s.lng]);
-      denseCache[day.id] = densify(pts, n);
+  function isOverview() {
+    return activeDay === "overview";
+  }
+
+  function dedupePts(pts, eps = 0.0007) {
+    const out = [];
+    pts.forEach((p) => {
+      if (!out.length || !almost(out[out.length - 1], p, eps)) out.push(p);
+    });
+    return out;
+  }
+
+  function waypointsFor(day) {
+    if (day.id === "overview") return dedupePts(day.points.map((p) => [p.lat, p.lng]), 0.0002);
+    const pts = day.route && day.route.length > 1 ? day.route : day.stops.map((s) => [s.lat, s.lng]);
+    return dedupePts(pts);
+  }
+
+  function simplifyPts(pts, max = 700) {
+    if (pts.length <= max) return pts;
+    const step = (pts.length - 1) / (max - 1);
+    const out = [];
+    for (let i = 0; i < max - 1; i++) out.push(pts[Math.round(i * step)]);
+    out.push(pts[pts.length - 1]);
+    return out;
+  }
+
+  const OSRM_URLS = [
+    "https://router.project-osrm.org/route/v1/driving/",
+    "https://routing.openstreetmap.de/routed-car/route/v1/driving/",
+  ];
+
+  async function fetchOsrm(pts) {
+    if (pts.length < 2) return pts;
+    const coords = pts.map(([lat, lng]) => `${lng},${lat}`).join(";");
+    const q = "?overview=full&geometries=geojson&steps=false";
+    let lastErr;
+    for (const base of OSRM_URLS) {
+      try {
+        const res = await fetch(base + coords + q, { mode: "cors" });
+        if (!res.ok) continue;
+        const data = await res.json();
+        const geom = data?.routes?.[0]?.geometry?.coordinates;
+        if (!geom || geom.length < 2) continue;
+        return geom.map(([lng, lat]) => [lat, lng]);
+      } catch (err) {
+        lastErr = err;
+      }
     }
-    return denseCache[day.id];
+    throw lastErr || new Error("osrm");
+  }
+
+  function fallbackRoute(pts) {
+    return densify(pts, 120);
+  }
+
+  function denseRoute(day) {
+    const id = day.id || day;
+    if (routes[id]) return routes[id];
+    const obj = id === "overview" ? TRIP.overview : dayOf(id) || day;
+    return fallbackRoute(waypointsFor(obj));
+  }
+
+  async function loadRoute(day) {
+    const id = day.id;
+    const wps = waypointsFor(day);
+    if (!routes[id]) routes[id] = fallbackRoute(wps);
+    if (wps.length < 2) return routes[id];
+    try {
+      routes[id] = simplifyPts(await fetchOsrm(wps));
+      if (map) map.getContainer().dataset.osrm = id;
+      if (activeDay === id) paintCurrentLines();
+    } catch (_) {
+      routes[id] = fallbackRoute(wps);
+    }
+    return routes[id];
+  }
+
+  function prefetchRoutes() {
+    loadRoute(TRIP.overview);
+    TRIP.days.forEach((d, i) => {
+      window.setTimeout(() => loadRoute(d), 280 * (i + 1));
+    });
   }
 
   function nearestIndex(pts, ll) {
@@ -395,20 +514,12 @@
     return Math.abs(a[0] - b[0]) < eps && Math.abs(a[1] - b[1]) < eps;
   }
 
-  function bearingDeg(a, b) {
-    const dLng = ((b[1] - a[1]) * Math.PI) / 180;
-    const lat1 = (a[0] * Math.PI) / 180;
-    const lat2 = (b[0] * Math.PI) / 180;
-    const y = Math.sin(dLng) * Math.cos(lat2);
-    const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
-    return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
-  }
-
-  function setCarBearing(a, b) {
-    const el = carMarker?.getElement()?.querySelector(".car-rot");
-    if (!el) return;
-    if (almost(a, b, 0.00005)) return;
-    el.style.transform = `rotate(${bearingDeg(a, b) - 90}deg)`;
+  function setCarFlip(a, b) {
+    const wrap = carMarker?.getElement()?.querySelector(".car-rot");
+    if (!wrap) return;
+    if (almost(a, b, 0.00008)) return;
+    // 🚗 faces left; mirror only when driving east so it stays level.
+    wrap.style.transform = b[1] > a[1] ? "scaleX(-1)" : "scaleX(1)";
   }
 
   function pathDuration(pts) {
@@ -416,7 +527,7 @@
     for (let i = 1; i < pts.length; i++) {
       d += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
     }
-    return Math.min(isCompact() ? 1800 : 2600, Math.max(420, d * (isCompact() ? 1200 : 1700) + pts.length * 7));
+    return Math.min(isCompact() ? 2200 : 3800, Math.max(480, d * (isCompact() ? 1400 : 1900)));
   }
 
   function buildPath(day, destLL) {
@@ -425,12 +536,12 @@
     const startLL = [cur.lat, cur.lng];
     const iDest = nearestIndex(dense, destLL);
     const iFrom = nearestIndex(dense, startLL);
-    const onRoute = almost(startLL, dense[iFrom], 0.06);
+    const onRoute = almost(startLL, dense[iFrom], 0.08);
     if (onRoute) {
       if (iFrom === iDest) return [dense[iDest]];
       return iFrom < iDest ? dense.slice(iFrom, iDest + 1) : dense.slice(iDest, iFrom + 1).reverse();
     }
-    const onto = densify([startLL, dense[iFrom]], 30);
+    const onto = densify([startLL, dense[iFrom]], 24);
     const along =
       iFrom <= iDest ? dense.slice(iFrom, iDest + 1) : dense.slice(iDest, iFrom + 1).reverse();
     return onto.concat(along.slice(1));
@@ -440,36 +551,64 @@
     const dense = denseRoute(day);
     const idx = nearestIndex(dense, carLL);
     if (ghostLine) ghostLine.setLatLngs(dense);
-    if (activeLine) activeLine.setLatLngs(dense.slice(0, Math.max(2, idx + 1)));
+    if (activeLine) {
+      if (dayFollow) activeLine.setLatLngs(dense.slice(0, Math.max(2, idx + 1)));
+      else activeLine.setLatLngs(dense);
+    }
   }
 
   function keepCarInView(ll) {
-    if (!map) return;
-    const pad = isCompact() ? -0.16 : -0.28;
-    const inner = map.getBounds().pad(pad);
-    if (!inner.contains(ll)) map.panTo(ll, { animate: false });
+    if (!map || !dayFollow) return;
+    map.panTo(ll, { animate: false });
   }
 
-  function paintDayLines(day) {
+  function lineStyle(color, ghost) {
+    return {
+      color,
+      weight: ghost ? 3 : 4.5,
+      opacity: ghost ? 0.28 : 0.95,
+      lineCap: "round",
+      smoothFactor: 0,
+      className: ghost ? "route-ghost" : "route-active",
+    };
+  }
+
+  function paintCurrentLines() {
+    if (isOverview()) paintOverviewLines(false);
+    else {
+      const day = dayOf(activeDay);
+      if (day) paintDayLines(day, !dayFollow);
+    }
+  }
+
+  function paintOverviewLines(fit) {
+    const dense = denseRoute(TRIP.overview);
+    if (ghostLine) map.removeLayer(ghostLine);
+    if (activeLine) map.removeLayer(activeLine);
+    ghostLine = L.polyline(dense, lineStyle(TRIP.overview.color, true)).addTo(map);
+    activeLine = L.polyline(dense, lineStyle(TRIP.overview.color, false)).addTo(map);
+    if (!traveling) carMarker.setLatLng(dense[0]);
+    if (fit && dense.length) {
+      map.flyToBounds(L.latLngBounds(dense).pad(isCompact() ? 0.22 : 0.18), {
+        duration: isCompact() ? 0.7 : 1.05,
+      });
+    }
+  }
+
+  function paintDayLines(day, full = true) {
     const dense = denseRoute(day);
     if (ghostLine) map.removeLayer(ghostLine);
     if (activeLine) map.removeLayer(activeLine);
-    ghostLine = L.polyline(dense, {
-      color: day.color,
-      weight: 3,
-      opacity: 0.28,
-      lineCap: "round",
-      className: "route-ghost",
-    }).addTo(map);
+    ghostLine = L.polyline(dense, lineStyle(day.color, true)).addTo(map);
     const cur = carMarker.getLatLng();
     const idx = nearestIndex(dense, [cur.lat, cur.lng]);
-    activeLine = L.polyline(dense.slice(0, Math.max(2, idx + 1)), {
-      color: day.color,
-      weight: 4.5,
-      opacity: 0.95,
-      lineCap: "round",
-      className: "route-active",
-    }).addTo(map);
+    activeLine = L.polyline(full ? dense : dense.slice(0, Math.max(2, idx + 1)), lineStyle(day.color, false)).addTo(
+      map
+    );
+  }
+
+  function currentSubject() {
+    return isOverview() ? TRIP.overview : dayOf(activeDay);
   }
 
   function driveAlong(pts, opts = {}) {
@@ -480,8 +619,8 @@
     if (!pts || pts.length < 2) {
       if (pts?.[0]) {
         carMarker.setLatLng(pts[0]);
-        const day = dayOf(activeDay);
-        if (day) updateProgressLine(day, pts[0]);
+        const sub = currentSubject();
+        if (sub) updateProgressLine(sub, pts[0]);
       }
       onDone?.();
       return;
@@ -492,8 +631,8 @@
     if (reduced()) {
       const last = pts[pts.length - 1];
       carMarker.setLatLng(last);
-      const day = dayOf(activeDay);
-      if (day) updateProgressLine(day, last);
+      const sub = currentSubject();
+      if (sub) updateProgressLine(sub, last);
       traveling = false;
       FX.travelOff();
       onDone?.();
@@ -517,9 +656,9 @@
       const lng = lerp(pts[i0][1], pts[i1][1], lt);
       const ll = [lat, lng];
       carMarker.setLatLng(ll);
-      setCarBearing(pts[i0], pts[i1]);
-      const day = dayOf(activeDay);
-      if (day) updateProgressLine(day, ll);
+      setCarFlip(pts[i0], pts[i1]);
+      const sub = currentSubject();
+      if (sub) updateProgressLine(sub, ll);
       if (pan) keepCarInView(ll);
       if (t < 1) {
         driveRaf = requestAnimationFrame(tick);
@@ -535,45 +674,89 @@
   }
 
   function applyMarkerFocus(id, stopId) {
+    const ov = id === "overview";
+    ovMarkers.forEach((m) => {
+      const el = m.getElement();
+      if (!el) return;
+      el.classList.toggle("is-off", !ov);
+      el.classList.toggle("is-on-day", ov);
+      el.classList.toggle("is-target", ov && stopId && m.ovId === stopId);
+    });
     Object.values(markers).forEach((m) => {
       const el = m.getElement();
       if (!el) return;
-      const on = m.dayId === id;
+      const on = !ov && m.dayId === id;
       el.classList.toggle("is-off", !on);
       el.classList.toggle("is-on-day", on);
-      el.classList.toggle("is-target", !!stopId && m.stopId === stopId);
+      el.classList.toggle("is-target", !!(stopId && m.stopId === stopId && on));
       if (!on) m.closePopup();
     });
   }
 
-  function setActiveDay(id, opts = {}) {
-    const { fly = false, force = false } = opts;
-    if (!force && id === activeDay) return;
-    const day = dayOf(id);
-    if (!day) return;
-    activeDay = id;
-
+  function setNav(id) {
     document.querySelectorAll(".days-nav a").forEach((a) => {
       a.classList.toggle("is-on", a.dataset.day === id);
     });
     document.querySelectorAll(".day").forEach((el) => {
       el.classList.toggle("is-current", el.id === id);
     });
+  }
+
+  function showOverview(opts = {}) {
+    const { fly = true } = opts;
+    dayFollow = false;
+    followZooming = false;
+    holdFollowY = null;
+    activeStop = null;
+    traveling = false;
+    driveToken += 1;
+    activeDay = "overview";
+    setNav("overview");
+    const now = $("#map-now");
+    if (now) now.textContent = "весь маршрут · аэропорт → Дурмитор → аэропорт";
+    document.querySelectorAll(".stop").forEach((el) => el.classList.remove("is-on"));
+    applyMarkerFocus("overview");
+    requestAnimationFrame(() => applyMarkerFocus("overview"));
+    paintOverviewLines(fly);
+    loadRoute(TRIP.overview);
+  }
+
+  function setActiveDay(id, opts = {}) {
+    const { fly = true, force = false, follow = false } = opts;
+    if (id === "overview") {
+      showOverview({ fly });
+      return;
+    }
+    if (!force && id === activeDay && !follow) return;
+    const day = dayOf(id);
+    if (!day) return;
+    const switched = id !== activeDay;
+    activeDay = id;
+    if (switched) {
+      dayFollow = false;
+      followZooming = false;
+      holdFollowY = window.scrollY;
+      activeStop = null;
+    }
+    setNav(id);
     const now = $("#map-now");
     if (now) now.textContent = `${day.track} · ${day.date} · ${day.title}`;
-
     applyMarkerFocus(id, activeStop);
     requestAnimationFrame(() => applyMarkerFocus(id, activeStop));
-    paintDayLines(day);
-
-    if (fly) {
-      const pts = denseRoute(day);
-      map.flyToBounds(L.latLngBounds(pts).pad(isCompact() ? 0.5 : 0.32), {
-        duration: isCompact() ? 0.65 : 0.95,
+    const dense = denseRoute(day);
+    if (!dayFollow) carMarker.setLatLng(dense[0]);
+    paintDayLines(day, !dayFollow);
+    loadRoute(day);
+    if (fly && !dayFollow) {
+      ignoreScrollDrive = Date.now() + (isCompact() ? 800 : 1100);
+      map.flyToBounds(L.latLngBounds(dense).pad(isCompact() ? 0.42 : 0.28), {
+        duration: isCompact() ? 0.7 : 1,
       });
-    } else if (isCompact()) {
-      map.fitBounds(L.latLngBounds(denseRoute(day)).pad(0.48), { animate: false });
     }
+  }
+
+  function followZoom() {
+    return isCompact() ? 12 : 13;
   }
 
   function highlightStop(id, opts = {}) {
@@ -581,24 +764,52 @@
     const found = stopOf(id);
     if (!found) return;
     const { stop, day } = found;
-    const same = id === activeStop && day.id === activeDay;
 
     document.querySelectorAll(".stop").forEach((el) => {
       el.classList.toggle("is-on", el.dataset.stop === id);
     });
 
-    if (day.id !== activeDay) setActiveDay(day.id, { fly: false, force: true });
+    const entering = day.id !== activeDay;
+    if (entering) setActiveDay(day.id, { fly: false, force: true, follow: false });
+
+    const same = id === activeStop && !entering;
     activeStop = id;
     applyMarkerFocus(day.id, id);
-
     const now = $("#map-now");
     if (now) now.textContent = `${day.track} · ${stop.name}`;
 
     const dest = [stop.lat, stop.lng];
+    const dense = denseRoute(day);
+    const start = dense[0];
+
+    if (fromScroll && !dayFollow) {
+      dayFollow = true;
+      followZooming = true;
+      carMarker.setLatLng(start);
+      paintDayLines(day, false);
+      map.flyTo(start, followZoom(), { duration: 0.9 });
+      const token = ++driveToken;
+      map.once("moveend", () => {
+        if (token !== driveToken) return;
+        followZooming = false;
+        const path = buildPath(day, dest);
+        driveAlong(path, {
+          pan: true,
+          onDone: () => {
+            FX.caption(stop.name);
+            applyMarkerFocus(day.id, id);
+          },
+        });
+      });
+      return;
+    }
+
+    if (!dayFollow && !fromScroll) {
+      dayFollow = true;
+    }
+
     const cur = carMarker.getLatLng();
     if (same && almost([cur.lat, cur.lng], dest)) {
-      if (fly && !isCompact()) map.flyTo(dest, 13, { duration: 0.75 });
-      else if (isCompact()) map.panTo(dest, { animate: true, duration: 0.4 });
       if (openPop) markers[id]?.openPopup();
       return;
     }
@@ -606,12 +817,11 @@
     const path = buildPath(day, dest);
     if (!fromScroll) ignoreScrollDrive = Date.now() + pathDuration(path) + 120;
     driveAlong(path, {
-      pan: true,
-      zoomAfter: fly && !isCompact() ? 13 : null,
+      pan: dayFollow,
+      zoomAfter: fly && !isCompact() ? followZoom() : null,
       onDone: () => {
         FX.caption(stop.name);
         applyMarkerFocus(day.id, id);
-        if (isCompact()) map.panTo(dest, { animate: true, duration: 0.35 });
         if (openPop) markers[id]?.openPopup();
       },
     });
@@ -682,7 +892,25 @@
       });
     });
 
-    carMarker = L.marker(TRIP.days[0].route[0], {
+    TRIP.overview.points.forEach((p, i) => {
+      const [lat, lng] = offsetCoord(p.lat, p.lng, i > 3 ? 1 : 0);
+      const m = L.marker([lat, lng], {
+        icon: pinIcon(p.n.replace(/^0/, ""), TRIP.overview.color),
+      }).bindPopup(`<div class="pop"><h3>${p.name}</h3><p>${p.place}</p></div>`);
+      m.ovId = p.id;
+      m.on("click", () => {
+        if (!isOverview()) showOverview({ fly: false });
+        document.querySelectorAll(".spine li").forEach((el) => {
+          el.classList.toggle("is-on", el.dataset.ov === p.id);
+        });
+        applyMarkerFocus("overview", p.id);
+        m.openPopup();
+      });
+      ovMarkers.push(m);
+      m.addTo(map);
+    });
+
+    carMarker = L.marker([TRIP.overview.points[0].lat, TRIP.overview.points[0].lng], {
       icon: L.divIcon({
         className: "car-marker",
         html: '<div class="car-rot"><span class="car-emoji">🚗</span></div>',
@@ -694,34 +922,66 @@
 
     setTimeout(() => {
       refreshMapSize();
-      setActiveDay(TRIP.days[0].id, { fly: false, force: true });
+      showOverview({ fly: true });
+      prefetchRoutes();
     }, 300);
   }
 
   function playRoute() {
+    if (isOverview()) {
+      const pts = denseRoute(TRIP.overview);
+      const hud = $("#play-route");
+      carMarker.setLatLng(pts[0]);
+      hud.textContent = "Идёт сторона…";
+      dayFollow = true;
+      FX.rainNotes(1800);
+      ignoreScrollDrive = Date.now() + 12000;
+      driveAlong(pts, {
+        duration: Math.min(14000, Math.max(4000, pts.length * 12)),
+        pan: true,
+        notes: true,
+        onDone: () => {
+          hud.textContent = "Проиграть сторону";
+          dayFollow = false;
+          map.flyToBounds(L.latLngBounds(pts).pad(0.2), { duration: 0.8 });
+        },
+      });
+      return;
+    }
     const day = dayOf(activeDay);
     if (!day || traveling) return;
     const hud = $("#play-route");
-    const pts = denseRoute(day, 170);
+    const pts = denseRoute(day);
     carMarker.setLatLng(pts[0]);
     hud.textContent = "Идёт сторона…";
+    dayFollow = true;
     FX.rainNotes(2200);
     ignoreScrollDrive = Date.now() + 10000;
     driveAlong(pts, {
-      duration: Math.min(9000, Math.max(2800, pts.length * 22)),
+      duration: Math.min(10000, Math.max(2800, pts.length * 12)),
       pan: true,
       notes: true,
       onDone: () => {
         hud.textContent = "Проиграть сторону";
-        map.flyToBounds(L.latLngBounds(day.route).pad(0.28), { duration: 0.8 });
+        map.flyToBounds(L.latLngBounds(pts).pad(0.28), { duration: 0.8 });
       },
     });
   }
 
   function fitActiveDay() {
+    if (isOverview()) {
+      dayFollow = false;
+      const pts = denseRoute(TRIP.overview);
+      map.flyToBounds(L.latLngBounds(pts).pad(0.2), { duration: 0.9 });
+      return;
+    }
     const day = dayOf(activeDay);
     if (!day) return;
-    map.flyToBounds(L.latLngBounds(day.route).pad(0.3), { duration: 0.9 });
+    dayFollow = false;
+    const pts = denseRoute(day);
+    carMarker.setLatLng(pts[0]);
+    paintDayLines(day, true);
+    map.flyToBounds(L.latLngBounds(pts).pad(0.28), { duration: 0.9 });
   }
 
   function targetFromScroll() {
@@ -746,9 +1006,14 @@
     if (bestStop && bestStopD < window.innerHeight * 0.42) {
       return { type: "stop", id: bestStop.dataset.stop };
     }
+    const ov = $("#overview");
+    if (ov) {
+      const r = ov.getBoundingClientRect();
+      if (r.top < band && r.bottom > band) return { type: "overview" };
+    }
     let bestDay = null;
     let bestDayD = Infinity;
-    document.querySelectorAll(".day").forEach((el) => {
+    document.querySelectorAll(".day:not(.overview-day)").forEach((el) => {
       const head = el.querySelector(".day-head") || el;
       const r = head.getBoundingClientRect();
       if (r.bottom < topCut || r.top > window.innerHeight * 0.78) return;
@@ -784,24 +1049,49 @@
     if (intro && !intro.classList.contains("is-gone")) return;
     if (!ritualDone && window.scrollY > window.innerHeight * 0.12) playTapeRitual();
     if (Date.now() < ignoreScrollDrive) return;
+    if (followZooming) return;
     const target = targetFromScroll();
     if (!target) return;
-    if (target.type === "stop" && target.id !== activeStop) {
-      highlightStop(target.id, { fromScroll: true, fly: false });
-    } else if (target.type === "day") {
-      const day = dayOf(target.id);
-      if (!day) return;
-      const first = day.stops[0];
-      if (first && first.id !== activeStop && activeDay !== day.id) {
-        highlightStop(first.id, { fromScroll: true, fly: false });
-      } else if (day.id !== activeDay) {
-        setActiveDay(day.id, { fly: false, force: true });
+    if (holdFollowY != null && Math.abs(window.scrollY - holdFollowY) < 48) {
+      if (target.type === "overview" && !isOverview()) showOverview({ fly: true });
+      else if (target.type === "day" && target.id !== activeDay) {
+        setActiveDay(target.id, { fly: true, force: true });
       }
+      return;
+    }
+    if (holdFollowY != null) holdFollowY = null;
+    if (target.type === "overview") {
+      if (!isOverview()) showOverview({ fly: true });
+      return;
+    }
+    if (target.type === "stop") {
+      const found = stopOf(target.id);
+      if (!found) return;
+      if (found.day.id !== activeDay) {
+        setActiveDay(found.day.id, { fly: true, force: true });
+        return;
+      }
+      if (target.id !== activeStop) {
+        highlightStop(target.id, { fromScroll: true, fly: false });
+      }
+    } else if (target.type === "day") {
+      if (target.id !== activeDay) setActiveDay(target.id, { fly: true, force: true });
     }
   }
 
   function bind() {
     $("#story").addEventListener("click", (e) => {
+      const ov = e.target.closest("[data-ov]");
+      if (ov) {
+        if (!isOverview()) showOverview({ fly: false });
+        const id = ov.dataset.ov;
+        document.querySelectorAll(".spine li").forEach((el) => {
+          el.classList.toggle("is-on", el.dataset.ov === id);
+        });
+        applyMarkerFocus("overview", id);
+        ovMarkers.find((m) => m.ovId === id)?.openPopup();
+        return;
+      }
       const stop = e.target.closest(".stop");
       if (!stop || e.target.closest("a") || e.target.matches(".check")) return;
       highlightStop(stop.dataset.stop, { fly: true, fromScroll: false });
@@ -816,11 +1106,15 @@
     $("#days-nav").addEventListener("click", (e) => {
       const a = e.target.closest("a");
       if (!a) return;
-      const day = dayOf(a.dataset.day);
-      if (!day) return;
-      setActiveDay(day.id, { fly: false, force: true });
-      const first = day.stops[0];
-      if (first) highlightStop(first.id, { fly: false, fromScroll: false, openPop: false });
+      e.preventDefault();
+      const id = a.dataset.day;
+      const el = document.getElementById(id);
+      if (el) el.scrollIntoView({ behavior: "instant", block: "start" });
+      if (id === "overview") showOverview({ fly: true });
+      else setActiveDay(id, { fly: true, force: true });
+      holdFollowY = window.scrollY;
+      ignoreScrollDrive = Date.now() + 1100;
+      history.replaceState(null, "", "#" + id);
     });
 
     $("#play-route").addEventListener("click", playRoute);
@@ -908,7 +1202,7 @@
       FX.startAmbient();
       setTimeout(() => {
         refreshMapSize();
-        if (activeDay) setActiveDay(activeDay, { fly: false, force: true });
+        showOverview({ fly: true });
       }, 400);
     };
     if (gone) {

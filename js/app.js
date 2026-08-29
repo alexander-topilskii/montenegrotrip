@@ -44,6 +44,14 @@
     return Math.min(1, Math.max(0, v));
   }
 
+  function viewH() {
+    return (window.visualViewport && window.visualViewport.height) || window.innerHeight;
+  }
+
+  function viewTop() {
+    return (window.visualViewport && window.visualViewport.offsetTop) || 0;
+  }
+
   function smoothstep(t) {
     return t * t * (3 - 2 * t);
   }
@@ -340,6 +348,7 @@
       travel = 1;
       traveling = true;
       document.body.classList.add("is-traveling");
+      if (isCompact()) return;
       kickTick();
       if (reduced()) return;
       window.clearInterval(sparkIv);
@@ -400,8 +409,8 @@
 
     function startAmbient() {
       document.body.classList.add("tape-on");
-      kickTick();
-      if (reduced() || ambientIv) return;
+      if (!isCompact()) kickTick();
+      if (reduced() || ambientIv || isCompact()) return;
       ambientIv = window.setInterval(() => {
         if (!document.body.classList.contains("tape-on")) return;
         if (travel > 0.2) return;
@@ -679,11 +688,15 @@
       });
     }
 
-    function focusFromRect(r, vh) {
+    function frameProbe(el) {
+      return el.querySelector(".frame-shot, .frame-cluster") || el;
+    }
+
+    function focusFromRect(r, vh, origin) {
       const mid = (r.top + r.bottom) / 2;
-      const dist = Math.abs(mid - vh * 0.5) / vh;
-      if (dist >= 0.42) return 0;
-      const u = dist / 0.42;
+      const dist = Math.abs(mid - (origin + vh * 0.5)) / vh;
+      if (dist >= 0.48) return 0;
+      const u = dist / 0.48;
       return 1 - u * u;
     }
 
@@ -762,21 +775,21 @@
     function filmProgress() {
       const plan = $("#plan");
       if (!plan) return 0;
-      const vh = window.innerHeight;
+      const vh = viewH();
       const top = window.scrollY + plan.getBoundingClientRect().top;
       const start = top - vh * 0.12;
       const end = top + plan.offsetHeight - vh * 0.72;
       return clamp01((window.scrollY - start) / Math.max(1, end - start));
     }
 
-    function pickFrame(vh) {
-      const c = vh * 0.5;
+    function pickFrame(vh, origin) {
+      const c = origin + vh * 0.5;
       let idx = lastBest;
       let bestDist = Infinity;
       let seen = false;
       frames.forEach((el, i) => {
-        const r = el.getBoundingClientRect();
-        if (r.bottom <= 48 || r.top >= vh - 48) return;
+        const r = frameProbe(el).getBoundingClientRect();
+        if (r.bottom <= origin + 24 || r.top >= origin + vh - 24) return;
         seen = true;
         const dist = Math.abs((r.top + r.bottom) / 2 - c);
         if (dist < bestDist) {
@@ -792,34 +805,38 @@
         raf = 0;
         return;
       }
-      const vh = window.innerHeight;
+      const vh = viewH();
+      const origin = viewTop();
       const motion = !reduced();
-      const lerpCar = motion ? 0.12 : 1;
+      const compact = isCompact();
+      const snap = !motion || compact;
+      const lerpCar = snap ? 1 : 0.12;
 
       const raw = frames.map((el) => {
-        const r = el.getBoundingClientRect();
-        if (r.bottom < -vh * 0.2 || r.top > vh * 1.2) return 0;
+        const r = frameProbe(el).getBoundingClientRect();
+        if (r.bottom < origin - vh * 0.2 || r.top > origin + vh * 1.2) return 0;
         return motion
-          ? focusFromRect(r, vh)
-          : Math.abs((r.top + r.bottom) / 2 - vh * 0.5) < vh * 0.45
+          ? focusFromRect(r, vh, origin)
+          : Math.abs((r.top + r.bottom) / 2 - (origin + vh * 0.5)) < vh * 0.45
             ? 1
             : 0.18;
       });
 
-      const best = pickFrame(vh);
+      const best = pickFrame(vh, origin);
       lastBest = best;
 
       let moving = false;
       frames.forEach((el, i) => {
         let target = raw[i];
-        if (i === best) target = Math.max(target, 0.88);
+        if (i === best) target = Math.max(target, compact ? 1 : 0.88);
+        else if (compact) target = target > 0.05 ? Math.max(target, 0.86) : 0;
         else target *= 0.55;
         const prev = parseFloat(el.style.getPropertyValue("--focus")) || 0;
-        const k = motion ? 0.22 : 1;
+        const k = snap ? 1 : 0.22;
         let next = prev + (target - prev) * k;
         if (Math.abs(next - target) < 0.003) next = target;
         else moving = true;
-        el.style.setProperty("--focus", next.toFixed(3));
+        if (next !== prev) el.style.setProperty("--focus", next.toFixed(3));
         el.style.zIndex = String(4 + Math.round(next * 24));
       });
 
@@ -857,7 +874,7 @@
       const film = $("#film");
       if (film) {
         const fr = film.getBoundingClientRect();
-        document.body.classList.toggle("is-on-road", fr.top < vh * 0.78 && fr.bottom > 90);
+        document.body.classList.toggle("is-on-road", fr.top < origin + vh * 0.78 && fr.bottom > origin + 90);
       }
 
       const t0 = filmProgress();
@@ -887,7 +904,12 @@
         currentSrc = first;
       }
       window.addEventListener("scroll", onScroll, { passive: true });
+      window.addEventListener("scrollend", onScroll, { passive: true });
+      window.addEventListener("touchend", onScroll, { passive: true });
       window.addEventListener("resize", onScroll);
+      if (window.visualViewport) {
+        visualViewport.addEventListener("resize", onScroll, { passive: true });
+      }
       onScroll();
     }
 
@@ -897,7 +919,7 @@
   function cassetteProgress() {
     const hero = $("#hero");
     if (!hero) return 1;
-    const total = hero.offsetHeight - window.innerHeight;
+    const total = hero.offsetHeight - viewH();
     const rect = hero.getBoundingClientRect();
     return clamp01(total > 0 ? -rect.top / total : 0);
   }
@@ -917,8 +939,9 @@
       setTapeProgress(cassetteProgress() * 0.1);
       return;
     }
-    const top = film.offsetTop - window.innerHeight * 0.12;
-    const end = film.offsetTop + film.offsetHeight - window.innerHeight * 0.7;
+    const vh = viewH();
+    const top = film.offsetTop - vh * 0.12;
+    const end = film.offsetTop + film.offsetHeight - vh * 0.7;
     setTapeProgress(0.1 + 0.9 * clamp01((window.scrollY - top) / Math.max(1, end - top)));
     const glow = $("#scroll-glow");
     if (glow) {
@@ -1015,7 +1038,7 @@
 
     function render() {
       const rect = hero.getBoundingClientRect();
-      const total = hero.offsetHeight - window.innerHeight;
+      const total = hero.offsetHeight - viewH();
       const p = reduced() ? 1 : clamp01(total > 0 ? -rect.top / total : 0);
 
       if (rect.bottom < -200) {

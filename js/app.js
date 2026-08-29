@@ -999,7 +999,7 @@
     const intro = $("#hero-intro");
     const status = $("#deck-status");
     const cue = $("#scroll-cue");
-    if (!hero || !stage || !cassette || !anchor || !slot || !door || !intro || !status || !cue) return;
+    if (!hero || !stage || !cassette || !anchor || !slot || !door) return;
     TAPE.init();
 
     const STATUS = [
@@ -1024,22 +1024,23 @@
         return;
       }
 
-      const stageRect = stage.getBoundingClientRect();
       const aRect = anchor.getBoundingClientRect();
       const sRect = slot.getBoundingClientRect();
-      const ax = aRect.left - stageRect.left + aRect.width / 2;
-      const ay = aRect.top - stageRect.top + aRect.height / 2;
-      const sx = sRect.left - stageRect.left + sRect.width / 2;
-      const sy = sRect.top - stageRect.top + sRect.height / 2;
+      const ax = aRect.left + aRect.width / 2;
+      const ay = aRect.top + aRect.height / 2;
+      const sx = sRect.left + sRect.width / 2;
+      const sy = sRect.top + sRect.height / 2;
       const t = smoothstep(clamp01(p / 0.62));
       const shake = p > 0.5 && p < 0.68 ? Math.sin(p * 220) * 2.2 * (1 - t) : 0;
       cassette.style.transform =
-        `translate(calc(-50% + ${ax + (sx - ax) * t + shake}px), calc(-50% + ${ay + (sy - ay) * t}px)) ` +
+        `translate(-50%, -50%) translate(${(sx - ax) * t + shake}px, ${(sy - ay) * t}px) ` +
         `rotate(${-7 + 7 * t + shake * 0.4}deg) scale(${1 + (0.44 - 1) * t})`;
       cassette.style.opacity = String(clamp01(1 - (p - 0.58) / 0.1));
-      intro.style.opacity = String(clamp01(1 - p / 0.34));
-      intro.style.transform = `translateY(${-p * 70}px)`;
-      cue.style.opacity = String(clamp01(1 - p / 0.22));
+      if (intro) {
+        intro.style.opacity = String(clamp01(1 - p / 0.34));
+        intro.style.transform = `translateY(${-p * 70}px)`;
+      }
+      if (cue) cue.style.opacity = String(clamp01(1 - p / 0.22));
       const d = clamp01((p - 0.56) / 0.12);
       door.style.transform = `scaleY(${d})`;
       door.style.opacity = String(0.25 + d * 0.75);
@@ -1073,7 +1074,7 @@
       if (!playing && p < 0.5) fired = false;
 
       const si = p < 0.3 ? 0 : p < 0.56 ? 1 : p < 0.66 ? 2 : 3;
-      if (status.dataset.i !== String(si)) {
+      if (status && status.dataset.i !== String(si)) {
         status.dataset.i = String(si);
         status.textContent = STATUS[si];
         status.classList.toggle("is-live", si === 3);
@@ -1095,23 +1096,27 @@
     window.addEventListener("wheel", tryStartTape, { capture: true, passive: true });
     window.addEventListener("touchstart", tryStartTape, { capture: true, passive: true });
     window.addEventListener("keydown", tryStartTape, { capture: true });
+    render();
     requestAnimationFrame(render);
   }
 
   function bind() {
-    $("#plan").addEventListener("click", (e) => {
-      const go = e.target.closest("[data-go]");
-      if (go) {
-        goToDay(go.dataset.go);
-        return;
-      }
-    });
+    const plan = $("#plan");
+    if (plan) {
+      plan.addEventListener("click", (e) => {
+        const go = e.target.closest("[data-go]");
+        if (go) {
+          goToDay(go.dataset.go);
+          return;
+        }
+      });
 
-    $("#plan").addEventListener("change", (e) => {
-      if (!e.target.matches(".check")) return;
-      saved[e.target.dataset.id] = e.target.checked;
-      localStorage.setItem("mne-tapes", JSON.stringify(saved));
-    });
+      plan.addEventListener("change", (e) => {
+        if (!e.target.matches(".check")) return;
+        saved[e.target.dataset.id] = e.target.checked;
+        localStorage.setItem("mne-tapes", JSON.stringify(saved));
+      });
+    }
 
     document.querySelectorAll(".js-tape-play").forEach((btn) => {
       btn.addEventListener("click", (e) => {
@@ -1129,13 +1134,15 @@
     });
 
     const recTime = $("#rec-time");
-    const start = Date.now();
-    setInterval(() => {
-      const s = Math.floor((Date.now() - start) / 1000);
-      const mm = String(Math.floor(s / 60)).padStart(2, "0");
-      const ss = String(s % 60).padStart(2, "0");
-      recTime.textContent = `00:${mm}:${ss}`;
-    }, 1000);
+    if (recTime) {
+      const start = Date.now();
+      setInterval(() => {
+        const s = Math.floor((Date.now() - start) / 1000);
+        const mm = String(Math.floor(s / 60)).padStart(2, "0");
+        const ss = String(s % 60).padStart(2, "0");
+        recTime.textContent = `00:${mm}:${ss}`;
+      }, 1000);
+    }
 
     const mixtape = $("#mixtape");
     if (mixtape && !isCompact()) {
@@ -1153,18 +1160,22 @@
     compactMq.addEventListener("change", syncCompact);
     window.addEventListener("resize", syncCompact);
 
-    if (location.hash) {
-      const id = location.hash.slice(1);
-      const el = document.getElementById(id);
-      if (el) requestAnimationFrame(() => el.scrollIntoView({ block: "center" }));
+    const hashId = location.hash.slice(1);
+    if (hashId && hashId !== "hero") {
+      const el = document.getElementById(hashId);
+      if (el) requestAnimationFrame(() => el.scrollIntoView({ block: "start" }));
     }
   }
 
-  renderPlan();
-  renderStays();
-  renderTape();
   FX.init();
   initCassette();
+  try {
+    renderPlan();
+    renderStays();
+    renderTape();
+  } catch (err) {
+    console.error(err);
+  }
   FILM.init();
   bind();
 })();

@@ -212,10 +212,11 @@ html[data-theme="light"] .grain {
 
 .hero-cassette {
   position: absolute;
-  left: 0;
-  top: 0;
+  left: 50%;
+  top: 42%;
   width: min(78vw, 460px);
   z-index: 5;
+  transform: translate(-50%, -50%) rotate(-7deg);
   transform-origin: center;
   filter: drop-shadow(0 30px 50px rgba(0, 0, 0, 0.6));
   will-change: transform, opacity;

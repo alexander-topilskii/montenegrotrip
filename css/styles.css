@@ -741,54 +741,6 @@ body.is-playing .bar-deck__vu i {
   }
 }
 
-.days-nav {
-  display: flex;
-  gap: 6px;
-}
-
-.days-nav a {
-  width: 34px;
-  height: 34px;
-  display: grid;
-  place-items: center;
-  text-decoration: none;
-  font-family: var(--font-sign);
-  font-size: 1.05rem;
-  border: 1px solid rgba(239, 230, 214, 0.25);
-  color: var(--cream);
-  transition: 0.2s;
-}
-
-.days-nav a:hover,
-.days-nav a.is-on {
-  background: var(--rust);
-  border-color: var(--rust);
-}
-
-.theme-btn {
-  appearance: none;
-  flex-shrink: 0;
-  height: 34px;
-  min-width: 34px;
-  padding: 0 10px;
-  margin-left: 2px;
-  border: 1px solid rgba(239, 230, 214, 0.25);
-  background: transparent;
-  color: var(--cream);
-  font-family: var(--font-mono);
-  font-size: 0.68rem;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  cursor: pointer;
-}
-
-.theme-btn:hover,
-.theme-btn:focus-visible {
-  border-color: var(--gold);
-  color: var(--gold);
-  outline: none;
-}
-
 .polaroids {
   position: absolute;
   right: 7%;
@@ -1838,39 +1790,6 @@ body.is-traveling .grain {
   .rec {
     font-size: 0.68rem;
     flex-shrink: 0;
-  }
-
-  .days-nav {
-    margin-left: auto;
-    overflow-x: auto;
-    flex-wrap: nowrap;
-    max-width: none;
-    flex: 1;
-    justify-content: flex-end;
-    min-width: 0;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-  }
-
-  html.deck-docked .days-nav {
-    flex: 0 1 auto;
-    max-width: 42%;
-  }
-
-  .days-nav::-webkit-scrollbar {
-    display: none;
-  }
-
-  .days-nav a {
-    width: 30px;
-    height: 30px;
-    flex-shrink: 0;
-  }
-
-  .theme-btn {
-    height: 30px;
-    padding: 0 7px;
-    font-size: 0.58rem;
   }
 
   body.tape-on .now-play {

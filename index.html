@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ru" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -14,10 +14,9 @@
       href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Caveat:wght@400;600;700&family=Instrument+Serif:ital@0;1&family=Outfit:wght@300;400;500;600&family=Special+Elite&family=Unbounded:wght@300;500;700&display=swap"
       rel="stylesheet"
     />
-    <meta name="color-scheme" content="dark light" />
+    <meta name="color-scheme" content="dark" />
     <script>
-      document.documentElement.dataset.theme =
-        localStorage.getItem("mne-theme") === "light" ? "light" : "dark";
+      document.documentElement.dataset.theme = "dark";
     </script>
     <link rel="stylesheet" href="css/styles.css" />
     <link
@@ -59,10 +58,6 @@
       </div>
       <span class="now-play" id="now-play">▶ SIDE A</span>
       <a class="brand" href="#hero">МОНТЕНЕГРО</a>
-      <nav class="days-nav" id="days-nav" aria-label="Дни поездки"></nav>
-      <button type="button" class="theme-btn" id="theme-btn" aria-label="Светлая тема">
-        день
-      </button>
     </header>
 
     <section class="tape-hero" id="hero">
@@ -168,16 +163,6 @@
         Дальше — только дорога и то, что мы успеем запомнить.
       </p>
       <p class="epigraph__sign">— шесть дней, одна машина, полный багажник сентября</p>
-      <div class="polaroids" aria-hidden="true">
-        <figure class="polaroid">
-          <img src="images/kotor.jpg?v=places" alt="" />
-          <figcaption>город, который держат горы за плечи</figcaption>
-        </figure>
-        <figure class="polaroid">
-          <img src="images/perast.jpg?v=places" alt="" />
-          <figcaption>остров, который люди насыпали руками</figcaption>
-        </figure>
-      </div>
       <a class="to-map" href="#overview">↓ дальше по плёнке</a>
     </section>
 

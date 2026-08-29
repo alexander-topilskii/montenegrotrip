@@ -36,6 +36,10 @@
     return (key && TRIP.photos[key]) || "";
   }
 
+  function photoFile(src) {
+    return String(src).split("?")[0].split("/").pop();
+  }
+
   function clamp01(v) {
     return Math.min(1, Math.max(0, v));
   }
@@ -46,15 +50,6 @@
 
   function escapeAttr(s) {
     return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
-  }
-
-  function renderNav() {
-    const ov = `<a href="#overview" data-day="overview" title="Вся плёнка">◯</a>`;
-    $("#days-nav").innerHTML =
-      ov +
-      TRIP.days
-        .map((d) => `<a href="#${d.id}" data-day="${d.id}" title="${d.date}">${d.date.split(" ")[0]}</a>`)
-        .join("");
   }
 
   function ticketMarkup(stop, day, i) {
@@ -110,17 +105,30 @@
   }
 
   function renderPlan() {
+    const usedPhotos = new Set();
+    const takePhoto = (src) => {
+      if (!src) return "";
+      const file = photoFile(src);
+      if (!file || usedPhotos.has(file)) return "";
+      usedPhotos.add(file);
+      return src;
+    };
+
     const ov = TRIP.overview;
-    const hero = photoUrl("road") || TRIP.photos.kotor;
+    const hero = takePhoto(photoUrl("road") || TRIP.photos.kotor);
     const overviewHtml = `
       <article class="frame frame--over" id="overview"
         data-day="overview" data-photo="${hero}" data-kind="vista"
         data-lat="${ov.points[0].lat}" data-lng="${ov.points[0].lng}"
         data-now="вся плёнка" style="--day:${ov.color}; --tilt:-1.6">
-        <figure class="frame-shot">
+        ${
+          hero
+            ? `<figure class="frame-shot">
           <img src="${hero}" alt="" decoding="async">
           <figcaption>шесть дней, одна сторона</figcaption>
-        </figure>
+        </figure>`
+            : ""
+        }
         <header class="frame-copy">
           <p class="frame-kicker">${ov.slug}</p>
           <h2>${ov.title}</h2>
@@ -141,17 +149,22 @@
 
     const daysHtml = TRIP.days
       .map((day) => {
-        const src = photoUrl(day.photo);
+        const dayBg = photoUrl(day.photo);
+        const src = takePhoto(dayBg);
         const first = day.stops[0];
         const chapter = `
           <article class="frame frame--day" id="${day.id}"
-            data-day="${day.id}" data-photo="${src}" data-kind="day"
+            data-day="${day.id}" data-photo="${src || dayBg}" data-kind="day"
             data-lat="${first.lat}" data-lng="${first.lng}" data-now="${escapeAttr(day.title)}"
             style="--day:${day.color}; --tilt:${day.hwy % 2 ? -2.2 : 2}">
-            <figure class="frame-shot">
+            ${
+              src
+                ? `<figure class="frame-shot">
               <img src="${src}" alt="${day.caption}" loading="lazy" decoding="async">
               <figcaption>${day.caption}</figcaption>
-            </figure>
+            </figure>`
+                : ""
+            }
             <header class="frame-copy">
               <p class="frame-kicker">${day.track} · ${day.date} · ${day.weekday}</p>
               <h2>${day.title}</h2>
@@ -164,7 +177,7 @@
         let buf = [];
         let bufAt = 0;
         day.stops.forEach((stop, i) => {
-          const shot = photoUrl(stop.photo);
+          const shot = takePhoto(photoUrl(stop.photo));
           if (shot) {
             if (buf.length) {
               parts.push(reelMarkup(buf, day, bufAt));
@@ -818,9 +831,6 @@
       const day = el.dataset.day || "overview";
       if (day !== activeDay) {
         activeDay = day;
-        document.querySelectorAll("#days-nav a").forEach((a) => {
-          a.classList.toggle("is-on", a.dataset.day === day);
-        });
         if (lastDayFlash && lastDayFlash !== day && el.classList.contains("frame--day")) FX.flash();
         lastDayFlash = day;
       }
@@ -1103,13 +1113,6 @@
       localStorage.setItem("mne-tapes", JSON.stringify(saved));
     });
 
-    $("#days-nav").addEventListener("click", (e) => {
-      const a = e.target.closest("a");
-      if (!a) return;
-      e.preventDefault();
-      goToDay(a.dataset.day);
-    });
-
     document.querySelectorAll(".js-tape-play").forEach((btn) => {
       btn.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -1157,32 +1160,11 @@
     }
   }
 
-  function initTheme() {
-    const root = document.documentElement;
-    const btn = $("#theme-btn");
-    if (!btn) return;
-
-    function paint(theme) {
-      root.dataset.theme = theme;
-      localStorage.setItem("mne-theme", theme);
-      const light = theme === "light";
-      btn.textContent = light ? "ночь" : "день";
-      btn.setAttribute("aria-label", light ? "Тёмная тема" : "Светлая тема");
-    }
-
-    paint(root.dataset.theme === "light" ? "light" : "dark");
-    btn.addEventListener("click", () => {
-      paint(root.dataset.theme === "dark" ? "light" : "dark");
-    });
-  }
-
-  renderNav();
   renderPlan();
   renderStays();
   renderTape();
   FX.init();
   initCassette();
   FILM.init();
-  initTheme();
   bind();
 })();

@@ -18,7 +18,7 @@
     <script>
       document.documentElement.dataset.theme = "dark";
     </script>
-    <link rel="stylesheet" href="css/styles.css?v=tape1" />
+    <link rel="stylesheet" href="css/styles.css?v=on1" />
     <link
       rel="icon"
       href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎞</text></svg>"
@@ -236,12 +236,26 @@
       id="tape-audio"
       src="audio/rearview-horizon.mp3"
       loop
+      autoplay
       preload="auto"
       playsinline
       webkit-playsinline="true"
     ></audio>
+    <script>
+      (function () {
+        var a = document.getElementById("tape-audio");
+        if (!a) return;
+        a.playsInline = true;
+        a.muted = false;
+        var kick = function () {
+          a.play().catch(function () {});
+        };
+        kick();
+        a.addEventListener("canplay", kick);
+      })();
+    </script>
 
-    <script src="js/trip.js?v=tape1"></script>
-    <script src="js/app.js?v=tape1"></script>
+    <script src="js/trip.js?v=on1"></script>
+    <script src="js/app.js?v=on1"></script>
   </body>
 </html>

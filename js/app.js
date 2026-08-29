@@ -433,10 +433,9 @@
   const TAPE = (() => {
     const TARGET_VOL = 0.72;
     let audio = null;
-    let unlocked = false;
-    let wantPlay = false;
-    let primed = false;
+    let wantPlay = true;
     let fadeRaf = 0;
+    let watching = false;
 
     function node() {
       if (audio) return audio;
@@ -445,7 +444,6 @@
         audio = new Audio("audio/rearview-horizon.mp3");
         audio.loop = true;
         audio.preload = "auto";
-        audio.setAttribute("playsinline", "");
       }
       audio.loop = true;
       audio.preload = "auto";
@@ -479,70 +477,56 @@
       syncPlayButtons();
     }
 
-    function prime() {
-      if (userPaused || primed) return;
+    function play() {
+      if (userPaused) return Promise.resolve(false);
+      wantPlay = true;
       const a = node();
-      a.muted = true;
-      a.volume = 0;
-      primed = true;
+      a.muted = false;
+      if (a.volume < 0.18) a.volume = TARGET_VOL;
       try {
         const p = a.play();
+        fadeVolume(TARGET_VOL, 280);
         if (p && p.then) {
-          p.then(() => {
-            unlocked = true;
-            if (wantPlay && !userPaused) {
-              a.muted = false;
-              fadeVolume(TARGET_VOL, 400);
-              markLive();
-            }
-          }).catch(() => {
-            primed = false;
-          });
+          return p.then(() => {
+            markLive();
+            return true;
+          }).catch(() => false);
         }
+        markLive();
+        return Promise.resolve(true);
       } catch (_) {
-        primed = false;
+        return Promise.resolve(false);
       }
+    }
+
+    function onGesture(e) {
+      if (userPaused) return;
+      if (e && e.target && e.target.closest && e.target.closest(".js-tape-play, [data-tape]")) return;
+      play();
+    }
+
+    function watch() {
+      if (watching) return;
+      watching = true;
+      ["pointerdown", "pointerup", "touchstart", "touchend", "click", "keydown", "wheel"].forEach((ev) => {
+        window.addEventListener(ev, onGesture, { capture: true, passive: true });
+      });
+      document.addEventListener("visibilitychange", () => {
+        if (!document.hidden) play();
+      });
+      window.addEventListener("pageshow", () => play());
+      const a = node();
+      a.addEventListener("canplay", () => play());
+      a.addEventListener("playing", markLive);
     }
 
     function init() {
-      const a = node();
-      a.volume = TARGET_VOL;
-      try {
-        a.load();
-      } catch (_) {
-        /* ignore */
-      }
-    }
-
-    async function play() {
-      wantPlay = true;
-      const a = node();
-      if (primed && !a.paused) {
-        a.muted = false;
-        fadeVolume(TARGET_VOL, 480);
-        unlocked = true;
-        markLive();
-        return true;
-      }
-      a.muted = false;
-      if (a.volume < 0.18) a.volume = 0.22;
-      try {
-        const p = a.play();
-        fadeVolume(TARGET_VOL, 480);
-        await p;
-        unlocked = true;
-        primed = true;
-        markLive();
-        return true;
-      } catch (_) {
-        primed = false;
-        return false;
-      }
+      watch();
+      play();
     }
 
     function pause() {
       wantPlay = false;
-      primed = false;
       const a = node();
       fadeVolume(0, 220);
       window.setTimeout(() => {
@@ -552,7 +536,6 @@
 
     function stop() {
       wantPlay = false;
-      primed = false;
       const a = node();
       a.pause();
       a.currentTime = 0;
@@ -562,14 +545,14 @@
 
     function isPlaying() {
       const a = node();
-      return wantPlay && !a.paused && !a.muted;
+      return wantPlay && !a.paused;
     }
 
     function wantsPlay() {
       return wantPlay;
     }
 
-    return { init, prime, play, pause, stop, isPlaying, wantsPlay };
+    return { init, play, pause, stop, isPlaying, wantsPlay };
   })();
 
   function makeWave(x0, x1, y, amp, turns) {
@@ -1029,13 +1012,6 @@
     document.documentElement.classList.toggle("deck-docked", on);
   }
 
-  function tryStartTape(e) {
-    if (userPaused) return;
-    if (e && e.target && e.target.closest && e.target.closest(".js-tape-play, [data-tape]")) return;
-    TAPE.prime();
-    if (inserted || cassetteProgress() > 0.66) TAPE.play();
-  }
-
   function initCassette() {
     const hero = $("#hero");
     const stage = $("#hero-stage");
@@ -1047,7 +1023,6 @@
     const status = $("#deck-status");
     const cue = $("#scroll-cue");
     if (!hero || !stage || !cassette || !anchor || !slot || !door) return;
-    TAPE.init();
 
     const STATUS = [
       "вставь кассету — прокрути вниз",
@@ -1105,10 +1080,6 @@
       else if (p < 0.18) {
         setDeckDocked(false);
         inserted = false;
-        if (fired) {
-          TAPE.stop();
-          userPaused = false;
-        }
       }
 
       if (playing && !fired) {
@@ -1141,9 +1112,6 @@
 
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", onScroll);
-    ["pointerdown", "pointerup", "touchstart", "touchend", "click", "keydown", "wheel"].forEach((ev) => {
-      window.addEventListener(ev, tryStartTape, { capture: true, passive: ev !== "keydown" });
-    });
     render();
     requestAnimationFrame(render);
   }
@@ -1215,6 +1183,7 @@
     }
   }
 
+  TAPE.init();
   FX.init();
   initCassette();
   try {

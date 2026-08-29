@@ -435,8 +435,8 @@
     let audio = null;
     let unlocked = false;
     let wantPlay = false;
+    let primed = false;
     let fadeRaf = 0;
-    let armed = false;
 
     function node() {
       if (audio) return audio;
@@ -449,6 +449,9 @@
       }
       audio.loop = true;
       audio.preload = "auto";
+      audio.playsInline = true;
+      audio.setAttribute("playsinline", "");
+      audio.setAttribute("webkit-playsinline", "true");
       return audio;
     }
 
@@ -470,17 +473,35 @@
       fadeRaf = requestAnimationFrame(tick);
     }
 
-    function armUnlock() {
-      if (armed) return;
-      armed = true;
-      const kick = () => {
-        armed = false;
-        if (userPaused) return;
-        if (wantPlay || inserted) play();
-      };
-      ["pointerdown", "keydown", "wheel", "touchstart"].forEach((ev) => {
-        window.addEventListener(ev, kick, { once: true, capture: true, passive: true });
-      });
+    function markLive() {
+      document.body.classList.add("is-playing");
+      document.body.classList.remove("is-paused");
+      syncPlayButtons();
+    }
+
+    function prime() {
+      if (userPaused || primed) return;
+      const a = node();
+      a.muted = true;
+      a.volume = 0;
+      primed = true;
+      try {
+        const p = a.play();
+        if (p && p.then) {
+          p.then(() => {
+            unlocked = true;
+            if (wantPlay && !userPaused) {
+              a.muted = false;
+              fadeVolume(TARGET_VOL, 400);
+              markLive();
+            }
+          }).catch(() => {
+            primed = false;
+          });
+        }
+      } catch (_) {
+        primed = false;
+      }
     }
 
     function init() {
@@ -491,16 +512,16 @@
       } catch (_) {
         /* ignore */
       }
-      armUnlock();
     }
 
     async function play() {
       wantPlay = true;
       const a = node();
-      if (!a.paused && unlocked) {
-        document.body.classList.add("is-playing");
-        document.body.classList.remove("is-paused");
-        syncPlayButtons();
+      if (primed && !a.paused) {
+        a.muted = false;
+        fadeVolume(TARGET_VOL, 480);
+        unlocked = true;
+        markLive();
         return true;
       }
       a.muted = false;
@@ -510,18 +531,18 @@
         fadeVolume(TARGET_VOL, 480);
         await p;
         unlocked = true;
-        document.body.classList.add("is-playing");
-        document.body.classList.remove("is-paused");
-        syncPlayButtons();
+        primed = true;
+        markLive();
         return true;
       } catch (_) {
-        armUnlock();
+        primed = false;
         return false;
       }
     }
 
     function pause() {
       wantPlay = false;
+      primed = false;
       const a = node();
       fadeVolume(0, 220);
       window.setTimeout(() => {
@@ -531,22 +552,24 @@
 
     function stop() {
       wantPlay = false;
+      primed = false;
       const a = node();
       a.pause();
       a.currentTime = 0;
+      a.muted = false;
       a.volume = TARGET_VOL;
     }
 
     function isPlaying() {
       const a = node();
-      return wantPlay && !a.paused;
+      return wantPlay && !a.paused && !a.muted;
     }
 
     function wantsPlay() {
       return wantPlay;
     }
 
-    return { init, play, pause, stop, isPlaying, wantsPlay };
+    return { init, prime, play, pause, stop, isPlaying, wantsPlay };
   })();
 
   function makeWave(x0, x1, y, amp, turns) {
@@ -1009,6 +1032,7 @@
   function tryStartTape(e) {
     if (userPaused) return;
     if (e && e.target && e.target.closest && e.target.closest(".js-tape-play, [data-tape]")) return;
+    TAPE.prime();
     if (inserted || cassetteProgress() > 0.66) TAPE.play();
   }
 
@@ -1072,8 +1096,10 @@
       inserted = playing || dockedDeck;
       if (playing !== lastPlaying) {
         lastPlaying = playing;
-        if (playing && !userPaused) document.body.classList.add("is-playing");
-        else if (!playing && p < 0.18) document.body.classList.remove("is-playing");
+        if (playing && !userPaused) {
+          document.body.classList.add("is-playing");
+          TAPE.play();
+        } else if (!playing && p < 0.18) document.body.classList.remove("is-playing");
       }
       if (p > 0.66) setDeckDocked(true);
       else if (p < 0.18) {
@@ -1115,10 +1141,9 @@
 
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", onScroll);
-    window.addEventListener("pointerdown", tryStartTape, { capture: true, passive: true });
-    window.addEventListener("wheel", tryStartTape, { capture: true, passive: true });
-    window.addEventListener("touchstart", tryStartTape, { capture: true, passive: true });
-    window.addEventListener("keydown", tryStartTape, { capture: true });
+    ["pointerdown", "pointerup", "touchstart", "touchend", "click", "keydown", "wheel"].forEach((ev) => {
+      window.addEventListener(ev, tryStartTape, { capture: true, passive: ev !== "keydown" });
+    });
     render();
     requestAnimationFrame(render);
   }
